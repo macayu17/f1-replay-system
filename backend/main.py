@@ -7,7 +7,8 @@ import pandas as pd
 import json
 
 # Setup caching
-cache_dir = 'f1_cache'
+# Use /tmp for cloud environments (Render/Vercel), local folder for dev
+cache_dir = '/tmp/f1_cache' if os.environ.get('VERCEL') or os.environ.get('RENDER') else 'f1_cache'
 if not os.path.exists(cache_dir):
     os.makedirs(cache_dir)
 fastf1.Cache.enable_cache(cache_dir)
@@ -15,9 +16,16 @@ fastf1.Cache.enable_cache(cache_dir)
 app = FastAPI(title="PRAH Backend")
 
 # CORS Setup
+# Handle the case where ALLOWED_ORIGINS is just "*" (common in dev/simple setups)
+allowed_origins_env = os.environ.get("ALLOWED_ORIGINS", "*")
+if allowed_origins_env == "*":
+    origins = ["*"]
+else:
+    origins = allowed_origins_env.split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for dev
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
