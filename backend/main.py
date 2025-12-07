@@ -18,15 +18,19 @@ app = FastAPI(title="PRAH Backend")
 # CORS Setup
 # Handle the case where ALLOWED_ORIGINS is just "*" (common in dev/simple setups)
 allowed_origins_env = os.environ.get("ALLOWED_ORIGINS", "*")
+
 if allowed_origins_env == "*":
     origins = ["*"]
 else:
-    origins = allowed_origins_env.split(",")
+    # Split by comma, strip whitespace, and remove trailing slashes
+    origins = [origin.strip().rstrip("/") for origin in allowed_origins_env.split(",")]
+
+print(f"Configured CORS origins: {origins}")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=True if origins != ["*"] else False, # Disable credentials if allowing all origins to avoid CORS error
     allow_methods=["*"],
     allow_headers=["*"],
 )
