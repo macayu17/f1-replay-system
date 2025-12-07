@@ -8,9 +8,13 @@ function App() {
   const [races, setRaces] = useState([])
   const [selectedRace, setSelectedRace] = useState(null)
   const [loading, setLoading] = useState(false)
+  
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  
+  console.log("Frontend API URL:", API_URL); // Debugging log
 
   useEffect(() => {
-    axios.get('http://localhost:8000/api/seasons')
+    axios.get(`${API_URL}/api/seasons`)
       .then(res => setSeasons(res.data.seasons))
       .catch(err => console.error(err))
   }, [])
@@ -18,7 +22,7 @@ function App() {
   useEffect(() => {
     if (selectedSeason) {
       setLoading(true)
-      axios.get(`http://localhost:8000/api/${selectedSeason}/races`)
+      axios.get(`${API_URL}/api/${selectedSeason}/races`)
         .then(res => {
           // Ensure we have an array
           const raceData = Array.isArray(res.data) ? res.data : [];
