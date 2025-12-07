@@ -39,13 +39,18 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
     setWeather([])
     setTeamRadio([])
     
-    // Fetch Team Radio
-    axios.get(`${API_URL}/api/${year}/${raceName}/race/team_radio`)
-      .then(res => setTeamRadio(res.data))
-      .catch(err => console.error("Radio fetch error", err));
+    const fetchData = async () => {
+      try {
+        // Fetch Team Radio first
+        const radioRes = await axios.get(`${API_URL}/api/${year}/${raceName}/race/team_radio`);
+        setTeamRadio(radioRes.data);
+      } catch (err) {
+        console.error("Radio fetch error", err);
+      }
 
-    axios.get(`${API_URL}/api/${year}/${raceName}/race/telemetry_replay`)
-      .then(res => {
+      try {
+        // Then fetch Telemetry
+        const res = await axios.get(`${API_URL}/api/${year}/${raceName}/race/telemetry_replay`);
         const data = res.data.telemetry
         setTelemetry(data)
         setDriversInfo(res.data.drivers || {})
@@ -62,13 +67,15 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             setMaxTime(max)
             setCurrentTime(min)
         }
+      } catch (err) {
+        console.error("Telemetry fetch error", err);
+      } finally {
         setLoading(false)
-      })
-      .catch(err => {
-        console.error(err)
-        setLoading(false)
-      })
-  }, [year, raceName])
+      }
+    };
+
+    fetchData();
+  }, [year, raceName, API_URL])
 
   // Group telemetry by driver for performance
   const groupedTelemetry = useMemo(() => {
