@@ -1,0 +1,9 @@
+f1_cache/
+backend/f1_cache/
+__pycache__/
+*.pyc
+*.ff1pkl
+*.sqlite
+.env
+node_modules/
+.DS_Store
