@@ -114,7 +114,7 @@ function App() {
               </div>
               
               <div className="p-6">
-                <RaceReplay year={selectedSeason} raceName={selectedRace.EventName} />
+                <RaceReplay year={selectedSeason} raceName={selectedRace.EventName} apiUrl={API_URL} />
               </div>
             </div>
           </div>

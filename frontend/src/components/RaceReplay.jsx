@@ -6,7 +6,7 @@ import TelemetryCharts from './TelemetryCharts'
 import StrategyPanel from './StrategyPanel'
 import PitStopAnalysis from './PitStopAnalysis'
 
-const RaceReplay = ({ year, raceName }) => {
+const RaceReplay = ({ year, raceName, apiUrl }) => {
   const [telemetry, setTelemetry] = useState([])
   const [driversInfo, setDriversInfo] = useState({})
   const [events, setEvents] = useState([])
@@ -25,6 +25,9 @@ const RaceReplay = ({ year, raceName }) => {
   const [teamRadio, setTeamRadio] = useState([])
   
   const svgRef = useRef()
+  
+  // Use prop if available, otherwise fallback (though prop should always be there from App.jsx)
+  const API_URL = apiUrl || import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
   useEffect(() => {
     setLoading(true)
@@ -37,11 +40,11 @@ const RaceReplay = ({ year, raceName }) => {
     setTeamRadio([])
     
     // Fetch Team Radio
-    axios.get(`http://localhost:8000/api/${year}/${raceName}/race/team_radio`)
+    axios.get(`${API_URL}/api/${year}/${raceName}/race/team_radio`)
       .then(res => setTeamRadio(res.data))
       .catch(err => console.error("Radio fetch error", err));
 
-    axios.get(`http://localhost:8000/api/${year}/${raceName}/race/telemetry_replay`)
+    axios.get(`${API_URL}/api/${year}/${raceName}/race/telemetry_replay`)
       .then(res => {
         const data = res.data.telemetry
         setTelemetry(data)
