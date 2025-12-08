@@ -215,12 +215,16 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 }
 
                 // Determine Current Lap
-                // ALWAYS prefer calculation from official Laps data over telemetry LapNumber
-                // This fixes the "Lap 7 at half race" issue caused by telemetry gaps
-                if (groupedLaps[driver]) {
-                    // Find the last lap that has started (LapStartTime <= currentTime)
-                    // Since groupedLaps is sorted by LapNumber, we can iterate backwards or filter
-                    // Filter is safer. IMPORTANT: Check for valid LapStartTime (not null/undefined)
+                // Priority: 
+                // 1. Telemetry LapNumber (most complete, comes from telemetry merge)
+                // 2. Laps data LapStartTime (for validation)
+                // 3. Default to 1
+
+                // First use telemetry LapNumber if available
+                if (point.LapNumber !== undefined && point.LapNumber !== null && point.LapNumber >= 1) {
+                    point.Lap = point.LapNumber;
+                } else if (groupedLaps[driver]) {
+                    // Fallback to laps data 
                     const startedLaps = groupedLaps[driver].filter(l =>
                         l.LapStartTime !== null &&
                         l.LapStartTime !== undefined &&
@@ -231,17 +235,13 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                     if (currentLapData) {
                         point.Lap = currentLapData.LapNumber;
                     } else {
-                        // Before first lap start time
                         point.Lap = 1;
                     }
-                } else if (point.LapNumber !== undefined) {
-                    // Fallback to telemetry if no lap data
-                    point.Lap = point.LapNumber;
                 } else {
                     point.Lap = 1;
                 }
 
-                // Fix: Ensure Lap doesn't start at 0 if race has started
+                // Ensure Lap doesn't start at 0 or go negative
                 if (!point.Lap || point.Lap < 1) point.Lap = 1;
 
                 // Safety check for invalid coordinates
@@ -281,16 +281,16 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             if (a.Status === 'RET' && b.Status !== 'RET') return 1;
             if (b.Status === 'RET' && a.Status !== 'RET') return -1;
 
-            // 1. If Race Finished, respect Official Classification
-            const raceFinished = positions.some(p => (p.Lap || 0) >= totalLaps && totalLaps > 0);
-            const nearEnd = (maxTime - currentTime) < 30;
+            // 1. If Race Finished (past maxTime OR leader has crossed finish), 
+            //    ALWAYS use Official Classification
+            const leaderLap = Math.max(...positions.map(p => p.Lap || 0));
+            const raceFinished = (totalLaps > 0 && leaderLap >= totalLaps) || (currentTime >= maxTime - 5);
 
-            if (raceFinished || nearEnd) {
-                const posA = infoA.ClassifiedPosition || 99;
-                const posB = infoB.ClassifiedPosition || 99;
-                if (posA !== 99 || posB !== 99) {
-                    return posA - posB;
-                }
+            if (raceFinished) {
+                // Use official classification - default to 99 for non-classified
+                const posA = infoA.ClassifiedPosition ?? 99;
+                const posB = infoB.ClassifiedPosition ?? 99;
+                return posA - posB;
             }
 
             // 2. If Start of Race (Lap 0 or 1 and very early), respect Grid Position

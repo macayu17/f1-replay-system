@@ -62,9 +62,12 @@ def get_telemetry_replay(year: int, race_name: str):
         print(f"Loading session for {year} {race_name}...")
         session = fastf1.get_session(year, race_name, 'R')
         
-        # Optimization: Load only necessary data first
-        # telemetry=True is heavy. If it fails, we might need to optimize.
-        session.load(telemetry=True, laps=True, weather=True)
+        # Load all data including messages (for race control)
+        try:
+            session.load(telemetry=True, laps=True, weather=True, messages=True)
+        except TypeError:
+            # Older FastF1 version doesn't have messages parameter
+            session.load(telemetry=True, laps=True, weather=True)
         print("Session loaded successfully.")
         
         drivers = session.drivers
@@ -207,20 +210,24 @@ def get_telemetry_replay(year: int, race_name: str):
             ts = session.track_status.copy()
             ts['Time'] = ts['Time'].dt.total_seconds()
             events = json.loads(ts.to_json(orient='records'))
+            print(f"Track status events: {len(events)}")
 
         # Extract Race Control Messages
         race_control = []
         if hasattr(session, 'race_control_messages') and session.race_control_messages is not None:
-            rc = session.race_control_messages.copy()
-            if 'Time' in rc.columns:
-                if pd.api.types.is_timedelta64_ns_dtype(rc['Time']):
-                    rc['Time'] = rc['Time'].dt.total_seconds()
-                else:
-                    try:
-                        rc['Time'] = pd.to_timedelta(rc['Time']).dt.total_seconds()
-                    except:
-                        pass
-            race_control = json.loads(rc.to_json(orient='records'))
+            rc = session.race_control_messages
+            if not rc.empty:
+                rc = rc.copy()
+                if 'Time' in rc.columns:
+                    if pd.api.types.is_timedelta64_ns_dtype(rc['Time']):
+                        rc['Time'] = rc['Time'].dt.total_seconds()
+                    else:
+                        try:
+                            rc['Time'] = pd.to_timedelta(rc['Time']).dt.total_seconds()
+                        except:
+                            pass
+                race_control = json.loads(rc.to_json(orient='records'))
+                print(f"Race control messages: {len(race_control)}")
 
         # Extract Circuit Info
         circuit_info = {}
@@ -305,16 +312,42 @@ def get_telemetry_replay(year: int, race_name: str):
 def get_team_radio(year: int, race_name: str):
     try:
         session = fastf1.get_session(year, race_name, 'R')
-        session.load(telemetry=False, laps=False, weather=False)
+        # Need to load messages (FastF1 >= 3.0 requires explicit messages=True)
+        try:
+            session.load(telemetry=False, laps=False, weather=False, messages=True)
+        except TypeError:
+            # Older FastF1 version doesn't have messages parameter
+            session.load(telemetry=False, laps=False, weather=False)
         
-        if hasattr(session, 'team_radio'):
+        radio_data = []
+        
+        # Try team_radio attribute (FastF1 >= 3.0)
+        if hasattr(session, 'team_radio') and session.team_radio is not None and not session.team_radio.empty:
             radios = session.team_radio.copy()
-            radios['Time'] = radios['Time'].dt.total_seconds()
-            cols = ['Time', 'Driver', 'Message']
-            return json.loads(radios[cols].to_json(orient='records'))
-        return []
+            if 'Time' in radios.columns:
+                radios['Time'] = radios['Time'].dt.total_seconds()
+            cols = [c for c in ['Time', 'Driver', 'Message'] if c in radios.columns]
+            radio_data = json.loads(radios[cols].to_json(orient='records'))
+        # Fallback: Try get_driver_radio (older FastF1)
+        elif hasattr(session, 'get_driver_radio'):
+            for driver in session.drivers[:10]:  # Limit to first 10 drivers
+                try:
+                    radio = session.get_driver_radio(driver)
+                    if radio is not None and not radio.empty:
+                        radio['Driver'] = driver
+                        if 'Time' in radio.columns:
+                            radio['Time'] = radio['Time'].dt.total_seconds()
+                        cols = [c for c in ['Time', 'Driver', 'Message'] if c in radio.columns]
+                        radio_data.extend(json.loads(radio[cols].to_json(orient='records')))
+                except:
+                    pass
+        
+        print(f"Team radio: {len(radio_data)} messages loaded")
+        return radio_data
     except Exception as e:
         print(f"Error fetching radio: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 if __name__ == "__main__":
