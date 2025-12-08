@@ -138,7 +138,18 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         }
         
         if (idx !== -1) {
-            const point = { ...data[idx] };
+            const p1 = data[idx];
+            const p2 = data[idx + 1]; // Next point
+            
+            let point = { ...p1 };
+
+            // Interpolate X, Y for smoothness
+            // Only interpolate if gap is small (< 2s) to avoid interpolating across pit stops or dropouts
+            if (p2 && (p2.Time - p1.Time) < 2 && (p2.Time - p1.Time) > 0) {
+                const t = (currentTime - p1.Time) / (p2.Time - p1.Time);
+                point.X = p1.X + (p2.X - p1.X) * t;
+                point.Y = p1.Y + (p2.Y - p1.Y) * t;
+            }
             
             // Determine Status
             const isLastPoint = idx === data.length - 1;
@@ -146,7 +157,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             const driverInfo = driversInfo[driver];
             const officialStatus = driverInfo?.Status || 'Finished';
             
-            if (isLastPoint && timeDiff > 2) {
+            if (isLastPoint && timeDiff > 5) { // Increased tolerance to 5s
                 if (officialStatus === 'Finished' || officialStatus.includes('Lap')) {
                      point.Status = "FINISHED";
                 } else {
@@ -157,14 +168,17 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             }
 
             // Determine Current Lap
-            // Prefer LapNumber from telemetry if available (backend v2), fallback to calculation
+            // Prefer LapNumber from telemetry if available
             if (point.LapNumber !== undefined) {
                 point.Lap = point.LapNumber;
             } else if (laps && laps.length > 0) {
                 const driverLaps = laps.filter(l => l.Driver === driver);
                 const currentLapData = driverLaps.filter(l => l.LapStartTime <= currentTime).pop();
-                point.Lap = currentLapData ? currentLapData.LapNumber : 0; 
+                point.Lap = currentLapData ? currentLapData.LapNumber : 1; 
             }
+            
+            // Fix: Ensure Lap doesn't start at 0 if race has started
+            if (!point.Lap || point.Lap < 1) point.Lap = 1;
 
             return point;
         }
