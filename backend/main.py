@@ -117,18 +117,22 @@ def get_telemetry_replay(year: int, race_name: str):
                                     direction='backward')
                 
                 # Resample to 1 second frequency for smoother playback (was 2S)
-                # We use .first() but we must ensure LapNumber is forward filled correctly
                 tel = tel.set_index('Time')
                 
-                # Resample logic:
-                # For numeric/continuous data (X, Y, Speed, Distance, RPM), we can interpolate or take first.
-                # For categorical/discrete data (LapNumber, Compound, nGear, DRS), we should take the mode or first.
-                # Here we take first() which is safe for 1S intervals.
-                resampled = tel.resample('1S').first().reset_index()
+                # Create the full time grid
+                resampled = tel.resample('1S').first()
                 
-                # Forward fill missing values (crucial for LapNumber if resampling created gaps)
-                resampled['LapNumber'] = resampled['LapNumber'].ffill()
-                resampled['Compound'] = resampled['Compound'].ffill()
+                # Interpolate continuous variables to fill gaps (prevents disappearing cars)
+                continuous_cols = ['X', 'Y', 'Speed', 'Distance', 'Throttle', 'Brake', 'RPM']
+                cols_to_interp = [c for c in continuous_cols if c in resampled.columns]
+                resampled[cols_to_interp] = resampled[cols_to_interp].interpolate(method='linear', limit_direction='both')
+                
+                # Forward fill categorical/discrete variables
+                categorical_cols = ['LapNumber', 'Compound', 'nGear', 'DRS']
+                cols_to_ffill = [c for c in categorical_cols if c in resampled.columns]
+                resampled[cols_to_ffill] = resampled[cols_to_ffill].ffill()
+                
+                resampled = resampled.reset_index()
                 
                 # Select relevant columns
                 cols_to_keep = ['Time', 'X', 'Y', 'Speed', 'Compound', 'LapNumber', 'Distance', 'Throttle', 'Brake', 'nGear', 'RPM', 'DRS']
