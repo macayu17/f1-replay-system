@@ -130,10 +130,13 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             }
 
             // Determine Current Lap
-            if (laps && laps.length > 0) {
+            // Prefer LapNumber from telemetry if available (backend v2), fallback to calculation
+            if (point.LapNumber !== undefined) {
+                point.Lap = point.LapNumber;
+            } else if (laps && laps.length > 0) {
                 const driverLaps = laps.filter(l => l.Driver === driver);
                 const currentLapData = driverLaps.filter(l => l.LapStartTime <= currentTime).pop();
-                point.Lap = currentLapData ? currentLapData.LapNumber : 0; // 0 means grid/formation
+                point.Lap = currentLapData ? currentLapData.LapNumber : 0; 
             }
 
             return point;
@@ -141,14 +144,21 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         return null;
     }).filter(Boolean);
 
-    // Sort by Distance descending
-    positions.sort((a, b) => (b.Distance || 0) - (a.Distance || 0));
+    // Sort by Lap (descending) then Distance (descending)
+    // This ensures the leader is always on top, even if distance data is slightly off
+    positions.sort((a, b) => {
+        const lapA = a.Lap || 0;
+        const lapB = b.Lap || 0;
+        if (lapA !== lapB) return lapB - lapA;
+        return (b.Distance || 0) - (a.Distance || 0);
+    });
 
     // Calculate Gaps
     if (positions.length > 0) {
         // Find the leader (first running or finished car)
         const leader = positions.find(p => p.Status === "RUNNING" || p.Status === "FINISHED") || positions[0];
         const leaderDist = leader.Distance || 0;
+        const leaderLap = leader.Lap || 0;
         
         positions.forEach((p, i) => {
             if (p.Driver === leader.Driver) {
@@ -156,13 +166,19 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             } else if (p.Status === "RET") {
                 p.GapStr = "OUT";
             } else {
-                const speed = p.Speed / 3.6;
-                const distDiff = leaderDist - (p.Distance || 0);
-                if (speed > 1) {
-                    const timeGap = distDiff / speed;
-                    p.GapStr = `+${timeGap.toFixed(3)} s`;
+                // Check if lapped
+                const lapDiff = leaderLap - (p.Lap || 0);
+                if (lapDiff > 0) {
+                     p.GapStr = `+${lapDiff} Lap${lapDiff > 1 ? 's' : ''}`;
                 } else {
-                    p.GapStr = `+${distDiff.toFixed(0)} m`; 
+                    const speed = p.Speed / 3.6;
+                    const distDiff = leaderDist - (p.Distance || 0);
+                    if (speed > 1) {
+                        const timeGap = distDiff / speed;
+                        p.GapStr = `+${timeGap.toFixed(3)} s`;
+                    } else {
+                        p.GapStr = `+${distDiff.toFixed(0)} m`; 
+                    }
                 }
             }
         });

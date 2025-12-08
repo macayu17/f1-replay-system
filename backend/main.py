@@ -85,10 +85,10 @@ def get_telemetry_replay(year: int, race_name: str):
                 # This returns a single DataFrame for the whole session
                 tel = driver_laps.get_telemetry()
                 
-                # Create a mapping for Compound based on Time
-                # We need to merge 'Compound' from laps into telemetry
+                # Create a mapping for Compound and LapNumber based on Time
+                # We need to merge 'Compound' and 'LapNumber' from laps into telemetry
                 # We can use merge_asof, but we need to prepare the laps dataframe
-                laps_data = driver_laps[['LapStartTime', 'Compound']].copy()
+                laps_data = driver_laps[['LapStartTime', 'Compound', 'LapNumber']].copy()
                 laps_data['Time'] = laps_data['LapStartTime'] # Rename for merge
                 laps_data = laps_data.dropna(subset=['Time'])
                 
@@ -96,7 +96,7 @@ def get_telemetry_replay(year: int, race_name: str):
                 if not isinstance(tel['Time'].dtype, pd.Timedelta):
                     tel['Time'] = pd.to_timedelta(tel['Time'])
                 
-                # Fix for missing tyre data at start:
+                # Fix for missing tyre/lap data at start:
                 # Ensure we have a record at the beginning of time with the first lap's compound
                 if not laps_data.empty:
                     first_lap = laps_data.iloc[0]
@@ -104,14 +104,15 @@ def get_telemetry_replay(year: int, race_name: str):
                     # We use -1 seconds to ensure it covers the very first timestamp
                     start_row = pd.DataFrame({
                         'Time': [pd.Timedelta(seconds=-1)], 
-                        'Compound': [first_lap['Compound']]
+                        'Compound': [first_lap['Compound']],
+                        'LapNumber': [first_lap['LapNumber']]
                     })
                     laps_data = pd.concat([start_row, laps_data]).sort_values('Time')
 
-                # Merge Compound info
+                # Merge Compound and LapNumber info
                 # We use merge_asof to find the last LapStartTime <= Telemetry Time
                 tel = pd.merge_asof(tel.sort_values('Time'), 
-                                    laps_data[['Time', 'Compound']].sort_values('Time'), 
+                                    laps_data[['Time', 'Compound', 'LapNumber']].sort_values('Time'), 
                                     on='Time', 
                                     direction='backward')
                 
@@ -121,7 +122,7 @@ def get_telemetry_replay(year: int, race_name: str):
                 resampled = tel.resample('2S').first().reset_index()
                 
                 # Select relevant columns
-                cols_to_keep = ['Time', 'X', 'Y', 'Speed', 'Compound', 'Distance', 'Throttle', 'Brake', 'nGear', 'RPM', 'DRS']
+                cols_to_keep = ['Time', 'X', 'Y', 'Speed', 'Compound', 'LapNumber', 'Distance', 'Throttle', 'Brake', 'nGear', 'RPM', 'DRS']
                 available_cols = [c for c in cols_to_keep if c in resampled.columns]
                 
                 final_df = resampled[available_cols].copy()
