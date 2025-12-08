@@ -63,12 +63,27 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         setTotalLaps(res.data.total_laps || 0)
         
         if (data.length > 0) {
-            const min = d3.min(data, d => d.Time)
+            // Initialize start time based on Laps data if available, to avoid pre-race telemetry
+            // Find the earliest Lap 1 Start Time
+            const fetchedLaps = res.data.laps || [];
+            let min = d3.min(data, d => d.Time);
+            
+            if (fetchedLaps.length > 0) {
+                const lap1Starts = fetchedLaps
+                    .filter(l => l.LapNumber === 1 && l.LapStartTime !== null && l.LapStartTime !== undefined)
+                    .map(l => l.LapStartTime);
+                
+                if (lap1Starts.length > 0) {
+                    const raceStart = Math.min(...lap1Starts);
+                    // Start 5 seconds before the race starts
+                    if (raceStart > 0) min = Math.max(min, raceStart - 5);
+                }
+            }
+
             let max = d3.max(data, d => d.Time)
             
             // Calculate Race End Time (Winner's Finish Time)
             const totalLaps = res.data.total_laps || 0;
-            const fetchedLaps = res.data.laps || [];
             
             if (totalLaps > 0 && fetchedLaps.length > 0) {
                 // Find laps that are the final lap
@@ -183,8 +198,12 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             if (groupedLaps[driver]) {
                 // Find the last lap that has started (LapStartTime <= currentTime)
                 // Since groupedLaps is sorted by LapNumber, we can iterate backwards or filter
-                // Filter is safer
-                const startedLaps = groupedLaps[driver].filter(l => (l.LapStartTime || 0) <= currentTime);
+                // Filter is safer. IMPORTANT: Check for valid LapStartTime (not null/undefined)
+                const startedLaps = groupedLaps[driver].filter(l => 
+                    l.LapStartTime !== null && 
+                    l.LapStartTime !== undefined && 
+                    l.LapStartTime <= currentTime
+                );
                 const currentLapData = startedLaps[startedLaps.length - 1];
                 
                 if (currentLapData) {

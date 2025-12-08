@@ -274,8 +274,10 @@ def get_telemetry_replay(year: int, race_name: str):
                 if col in laps_export.columns:
                     laps_export[col] = laps_export[col].dt.total_seconds()
             
-            # Handle NaNs
-            laps_export = laps_export.fillna(0)
+            # Handle NaNs - DO NOT fill Time columns with 0 as it breaks logic
+            # We only fill non-time columns if needed, or let JSON handle nulls
+            # laps_export = laps_export.fillna(0) 
+            
             all_laps_data = json.loads(laps_export.to_json(orient='records'))
 
         return {
