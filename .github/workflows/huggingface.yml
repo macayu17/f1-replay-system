@@ -15,7 +15,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           # TODO: Update these if your Hugging Face username or Space name is different
-          HF_USERNAME: macayu17
+          HF_USERNAME: anayush1406
           HF_SPACE_NAME: f1-replay-backend
         run: |
           if [ -z "$HF_TOKEN" ]; then
