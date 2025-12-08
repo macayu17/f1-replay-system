@@ -196,8 +196,8 @@ def get_telemetry_replay(year: int, race_name: str):
                 if col in laps.columns:
                     laps[col] = laps[col].dt.total_seconds()
             
-            # Select columns
-            laps_cols = ['Driver', 'LapNumber', 'Stint', 'Compound', 'TyreLife', 'LapTime', 'LapStartTime', 'PitInTime', 'PitOutTime']
+            # Select columns - including sector times for analysis
+            laps_cols = ['Driver', 'LapNumber', 'Stint', 'Compound', 'TyreLife', 'LapTime', 'LapStartTime', 'PitInTime', 'PitOutTime', 'Sector1Time', 'Sector2Time', 'Sector3Time']
             available_laps_cols = [c for c in laps_cols if c in laps.columns]
             laps_data = json.loads(laps[available_laps_cols].to_json(orient='records'))
 

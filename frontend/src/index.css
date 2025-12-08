@@ -36,3 +36,22 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #666;
 }
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+/* Sector purple text color */
+.text-sector-purple {
+  color: var(--color-sector-purple);
+}
+
+.bg-sector-purple {
+  background-color: var(--color-sector-purple);
+}
