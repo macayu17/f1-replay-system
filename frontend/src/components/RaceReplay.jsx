@@ -67,6 +67,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             // Find the earliest Lap 1 Start Time
             const fetchedLaps = res.data.laps || [];
             let min = d3.min(data, d => d.Time);
+            let startAt = min;
             
             if (fetchedLaps.length > 0) {
                 const lap1Starts = fetchedLaps
@@ -75,8 +76,11 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 
                 if (lap1Starts.length > 0) {
                     const raceStart = Math.min(...lap1Starts);
-                    // Start 5 seconds before the race starts
-                    if (raceStart > 0) min = Math.max(min, raceStart - 5);
+                    // Set default start time to 5 seconds before race start
+                    // But keep 'min' as the absolute minimum so user can scrub back
+                    if (raceStart > 0) {
+                        startAt = Math.max(min, raceStart - 5);
+                    }
                 }
             }
 
@@ -94,16 +98,28 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                     // The winner is the first one to finish
                     const winnerFinishTime = Math.min(...finishTimes);
                     
-                    // Set max time to winner finish + 10 seconds (strict cut-off)
-                    if (winnerFinishTime > 0) {
-                        max = winnerFinishTime + 10;
+                    // Only clamp max time if winnerFinishTime is reasonable (e.g. > startAt)
+                    // And ensure we don't cut off too much if data continues
+                    if (winnerFinishTime > startAt) {
+                        // Use the later of (Winner + 30s) or (Max Data Time - 60s)
+                        // This prevents cutting off the race if totalLaps is wrong (too small)
+                        // But still tries to stop near the end
+                        // Actually, let's just trust the data max unless it's WAY longer
+                        
+                        // If winner finishes at T=5000, and data goes to T=6000, maybe we stop at 5060.
+                        // But if winner finishes at T=2000 (wrong totalLaps), and data goes to T=6000, we shouldn't stop at 2060.
+                        
+                        // Heuristic: If winnerFinishTime is within 5 minutes of max data, use it.
+                        if (max - winnerFinishTime < 300) {
+                             max = winnerFinishTime + 30;
+                        }
                     }
                 }
             }
 
             setMinTime(min)
             setMaxTime(max)
-            setCurrentTime(min)
+            setCurrentTime(startAt)
         }
       } catch (err) {
         console.error("Telemetry fetch error", err);

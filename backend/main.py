@@ -144,10 +144,11 @@ def get_telemetry_replay(year: int, race_name: str):
                 final_df['Time'] = final_df['Time'].dt.total_seconds()
                 final_df['Driver'] = driver
                 
-                # Filter out data after the race is officially over for this driver
-                # If we have total_laps, we can cut off data where LapNumber > total_laps + 1 (cool down)
-                if hasattr(session, 'total_laps'):
-                     final_df = final_df[final_df['LapNumber'] <= session.total_laps + 1]
+                # REMOVED: Filter out data after the race is officially over
+                # This was causing the race to end early if total_laps was incorrect or if data was slightly misaligned.
+                # We will let the frontend handle the "stop" logic.
+                # if hasattr(session, 'total_laps'):
+                #      final_df = final_df[final_df['LapNumber'] <= session.total_laps + 1]
 
                 # Use pandas to_json string then load it back to ensure compliance
                 # This handles NaN -> null automatically
