@@ -116,10 +116,19 @@ def get_telemetry_replay(year: int, race_name: str):
                                     on='Time', 
                                     direction='backward')
                 
-                # Resample to 2 second frequency to reduce data size (was 1S)
-                # This cuts the data size in half, helping with memory and network
+                # Resample to 1 second frequency for smoother playback (was 2S)
+                # We use .first() but we must ensure LapNumber is forward filled correctly
                 tel = tel.set_index('Time')
-                resampled = tel.resample('2S').first().reset_index()
+                
+                # Resample logic:
+                # For numeric/continuous data (X, Y, Speed, Distance, RPM), we can interpolate or take first.
+                # For categorical/discrete data (LapNumber, Compound, nGear, DRS), we should take the mode or first.
+                # Here we take first() which is safe for 1S intervals.
+                resampled = tel.resample('1S').first().reset_index()
+                
+                # Forward fill missing values (crucial for LapNumber if resampling created gaps)
+                resampled['LapNumber'] = resampled['LapNumber'].ffill()
+                resampled['Compound'] = resampled['Compound'].ffill()
                 
                 # Select relevant columns
                 cols_to_keep = ['Time', 'X', 'Y', 'Speed', 'Compound', 'LapNumber', 'Distance', 'Throttle', 'Brake', 'nGear', 'RPM', 'DRS']
@@ -131,6 +140,11 @@ def get_telemetry_replay(year: int, race_name: str):
                 final_df['Time'] = final_df['Time'].dt.total_seconds()
                 final_df['Driver'] = driver
                 
+                # Filter out data after the race is officially over for this driver
+                # If we have total_laps, we can cut off data where LapNumber > total_laps + 1 (cool down)
+                if hasattr(session, 'total_laps'):
+                     final_df = final_df[final_df['LapNumber'] <= session.total_laps + 1]
+
                 # Use pandas to_json string then load it back to ensure compliance
                 # This handles NaN -> null automatically
                 records = json.loads(final_df.to_json(orient='records'))
