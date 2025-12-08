@@ -162,7 +162,9 @@ def get_telemetry_replay(year: int, race_name: str):
                     "FirstName": row['FirstName'],
                     "LastName": row['LastName'],
                     "HeadshotUrl": row.get('HeadshotUrl', ''),
-                    "Status": row.get('Status', 'Finished')
+                    "Status": row.get('Status', 'Finished'),
+                    "GridPosition": int(row['GridPosition']) if pd.notna(row.get('GridPosition')) else 20,
+                    "ClassifiedPosition": int(row['Position']) if pd.notna(row.get('Position')) else 20
                 }
 
         # Extract Lap Data (Strategy & Pit Stops)

@@ -144,9 +144,33 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         return null;
     }).filter(Boolean);
 
-    // Sort by Lap (descending) then Distance (descending)
-    // This ensures the leader is always on top, even if distance data is slightly off
+    // Sort Logic
     positions.sort((a, b) => {
+        const infoA = driversInfo[a.Driver] || {};
+        const infoB = driversInfo[b.Driver] || {};
+
+        // 1. If Race Finished (or nearly finished), respect Official Classification
+        // This fixes the "Sainz vs Verstappen" issue where cool-down laps confuse the distance sort
+        const isFinished = a.Status === 'FINISHED' && b.Status === 'FINISHED';
+        if (isFinished) {
+            const posA = infoA.ClassifiedPosition || 99;
+            const posB = infoB.ClassifiedPosition || 99;
+            return posA - posB;
+        }
+
+        // 2. If Start of Race (Lap 0 or 1 and very early), respect Grid Position
+        // This fixes the "Random Order at Start" issue
+        const isStart = (a.Lap || 0) <= 1 && currentTime < 120; 
+        if (isStart) {
+             // If both have distance < 100m, use grid
+             if ((a.Distance || 0) < 300 && (b.Distance || 0) < 300) {
+                 const gridA = infoA.GridPosition || 20;
+                 const gridB = infoB.GridPosition || 20;
+                 return gridA - gridB;
+             }
+        }
+
+        // 3. Standard Race Sorting: Lap > Distance
         const lapA = a.Lap || 0;
         const lapB = b.Lap || 0;
         if (lapA !== lapB) return lapB - lapA;
@@ -444,7 +468,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                         </div>
                         <div className="text-white font-mono bg-black/80 border border-gray-700 p-3 rounded shadow-lg backdrop-blur min-w-[100px]">
                             <div className="text-[10px] text-gray-400 uppercase tracking-wider">Lap</div>
-                            <div className="text-2xl text-white font-bold tabular-nums">{standings[0]?.Lap || 0}</div>
+                            <div className="text-2xl text-white font-bold tabular-nums">{standings[0]?.Lap || (currentTime > 0 ? 1 : 0)}</div>
                         </div>
                     </div>
 
