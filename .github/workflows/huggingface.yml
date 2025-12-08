@@ -14,6 +14,17 @@ jobs:
       - name: Push to hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          # Replace 'macayu17' with your Hugging Face username if different
-          # Replace 'f1-replay-backend' with your Space name
-        run: git push https://macayu17:$HF_TOKEN@huggingface.co/spaces/macayu17/f1-replay-backend main
+          # TODO: Update these if your Hugging Face username or Space name is different
+          HF_USERNAME: macayu17
+          HF_SPACE_NAME: f1-replay-backend
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "Error: HF_TOKEN secret is not set."
+            exit 1
+          fi
+          
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          
+          # Force push to overwrite any default files (like README.md) created by Hugging Face
+          git push --force https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME main
