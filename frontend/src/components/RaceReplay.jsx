@@ -114,6 +114,20 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
     return groups;
   }, [telemetry]);
 
+  // Group laps by driver for performance
+  const groupedLaps = useMemo(() => {
+    const groups = {};
+    laps.forEach(l => {
+        if (!groups[l.Driver]) groups[l.Driver] = [];
+        groups[l.Driver].push(l);
+    });
+    // Ensure sorted by LapNumber
+    Object.keys(groups).forEach(driver => {
+        groups[driver].sort((a, b) => a.LapNumber - b.LapNumber);
+    });
+    return groups;
+  }, [laps]);
+
   // Calculate Standings & Current Positions
   const currentPositions = useMemo(() => {
     if (!groupedTelemetry || Object.keys(groupedTelemetry).length === 0) return [];
@@ -164,15 +178,26 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             }
 
             // Determine Current Lap
-            // Prefer LapNumber from telemetry if available
-            if (point.LapNumber !== undefined) {
+            // ALWAYS prefer calculation from official Laps data over telemetry LapNumber
+            // This fixes the "Lap 7 at half race" issue caused by telemetry gaps
+            if (groupedLaps[driver]) {
+                // Find the last lap that has started (LapStartTime <= currentTime)
+                // Since groupedLaps is sorted by LapNumber, we can iterate backwards or filter
+                // Filter is safer
+                const startedLaps = groupedLaps[driver].filter(l => (l.LapStartTime || 0) <= currentTime);
+                const currentLapData = startedLaps[startedLaps.length - 1];
+                
+                if (currentLapData) {
+                    point.Lap = currentLapData.LapNumber;
+                } else {
+                    // Before first lap start time
+                    point.Lap = 1;
+                }
+            } else if (point.LapNumber !== undefined) {
+                // Fallback to telemetry if no lap data
                 point.Lap = point.LapNumber;
-            } else if (laps && laps.length > 0) {
-                const driverLaps = laps.filter(l => l.Driver === driver);
-                // Find the lap where LapStartTime <= currentTime
-                // We need the LAST one that satisfies this
-                const currentLapData = driverLaps.filter(l => l.LapStartTime <= currentTime).pop();
-                point.Lap = currentLapData ? currentLapData.LapNumber : 1; 
+            } else {
+                point.Lap = 1;
             }
             
             // Fix: Ensure Lap doesn't start at 0 if race has started
