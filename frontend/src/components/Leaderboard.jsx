@@ -14,6 +14,21 @@ const TYRE_COLORS = {
   'UNKNOWN': 'border-gray-500 text-gray-500'
 };
 
+const TEAM_LOGOS = {
+    'Red Bull Racing': 'https://upload.wikimedia.org/wikipedia/en/4/41/Oracle_Red_Bull_Racing_logo.svg',
+    'McLaren': 'https://upload.wikimedia.org/wikipedia/en/6/66/McLaren_Racing_logo.svg',
+    'Ferrari': 'https://upload.wikimedia.org/wikipedia/en/c/c0/Scuderia_Ferrari_Logo.svg',
+    'Mercedes': 'https://upload.wikimedia.org/wikipedia/commons/f/fb/Mercedes_AMG_Petronas_F1_Logo.svg',
+    'Aston Martin': 'https://upload.wikimedia.org/wikipedia/en/b/bd/Aston_Martin_Lagonda_brand_logo.svg',
+    'Alpine': 'https://upload.wikimedia.org/wikipedia/en/2/26/Alpine_F1_Team_Logo.svg',
+    'Williams': 'https://upload.wikimedia.org/wikipedia/en/3/39/Williams_F1_logo_2020.svg',
+    'Haas F1 Team': 'https://upload.wikimedia.org/wikipedia/commons/d/d4/Haas_F1_Team_logo.svg',
+    'Kick Sauber': 'https://upload.wikimedia.org/wikipedia/commons/2/2c/Kick_Sauber_logo.svg',
+    'RB': 'https://upload.wikimedia.org/wikipedia/en/2/2b/Visa_Cash_App_RB_Formula_One_Team_Logo.svg',
+    'AlphaTauri': 'https://upload.wikimedia.org/wikipedia/en/2/2b/Visa_Cash_App_RB_Formula_One_Team_Logo.svg',
+    'Alfa Romeo': 'https://upload.wikimedia.org/wikipedia/commons/2/2c/Kick_Sauber_logo.svg'
+};
+
 const Leaderboard = ({ standings, driversInfo, onDriverClick }) => {
   return (
     <div className="bg-black/90 backdrop-blur-md rounded-lg border border-gray-700 w-full overflow-hidden font-mono text-sm shadow-2xl flex flex-col h-full">
@@ -27,6 +42,8 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick }) => {
           {standings.map((driver, index) => {
             const info = driversInfo[driver.Driver] || {};
             const teamColor = info.TeamColor || '#FFFFFF';
+            const teamName = info.TeamName || '';
+            const teamLogo = TEAM_LOGOS[Object.keys(TEAM_LOGOS).find(k => teamName.includes(k))] || null;
             const tyre = driver.Compound || 'UNKNOWN';
             const tyreClass = TYRE_COLORS[tyre.toUpperCase()] || TYRE_COLORS['UNKNOWN'];
             const isRetired = driver.Status === 'RET';
@@ -57,9 +74,16 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick }) => {
                     {isFinished && index === 0 ? '🏆' : index + 1}
                 </div>
                 
-                {/* Team Color Stripe (Hide if podium to avoid clash, or keep?) Keep it. */}
+                {/* Team Color Stripe */}
                 <div className="w-1.5 h-6 rounded-full mr-2" style={{ backgroundColor: teamColor }}></div>
                 
+                {/* Team Logo */}
+                {teamLogo && (
+                    <div className="w-6 h-6 mr-2 flex items-center justify-center bg-white/10 rounded p-0.5">
+                        <img src={teamLogo} alt={teamName} className="max-w-full max-h-full object-contain" />
+                    </div>
+                )}
+
                 {/* Driver Name */}
                 <div className="flex-1 font-bold text-white truncate flex flex-col justify-center leading-tight">
                   <span className="text-sm tracking-wide">{info.Abbreviation || driver.Driver}</span>

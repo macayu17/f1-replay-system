@@ -23,6 +23,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
   const [standings, setStandings] = useState([])
   const [selectedDriver, setSelectedDriver] = useState(null)
   const [teamRadio, setTeamRadio] = useState([])
+  const [totalLaps, setTotalLaps] = useState(0)
   
   const svgRef = useRef()
   
@@ -59,10 +60,36 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         setCircuitInfo(res.data.circuit_info || {})
         setWeather(res.data.weather || [])
         setLaps(res.data.laps || [])
+        setTotalLaps(res.data.total_laps || 0)
         
         if (data.length > 0) {
             const min = d3.min(data, d => d.Time)
-            const max = d3.max(data, d => d.Time)
+            let max = d3.max(data, d => d.Time)
+            
+            // Calculate Race End Time (Winner's Finish Time)
+            const totalLaps = res.data.total_laps || 0;
+            const fetchedLaps = res.data.laps || [];
+            
+            if (totalLaps > 0 && fetchedLaps.length > 0) {
+                // Find laps that are the final lap
+                const finalLaps = fetchedLaps.filter(l => l.LapNumber === totalLaps);
+                if (finalLaps.length > 0) {
+                    // Calculate finish times (StartTime + LapTime)
+                    const finishTimes = finalLaps.map(l => (l.LapStartTime || 0) + (l.LapTime || 0));
+                    // The winner is the first one to finish
+                    const winnerFinishTime = Math.min(...finishTimes);
+                    
+                    // Set max time to winner finish + 60 seconds (to see others finish)
+                    // But ensure we don't exceed the actual data max
+                    if (winnerFinishTime > 0) {
+                        const calculatedMax = winnerFinishTime + 60;
+                        if (calculatedMax < max) {
+                            max = calculatedMax;
+                        }
+                    }
+                }
+            }
+
             setMinTime(min)
             setMaxTime(max)
             setCurrentTime(min)
@@ -149,20 +176,24 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         const infoA = driversInfo[a.Driver] || {};
         const infoB = driversInfo[b.Driver] || {};
 
-        // 1. If Race Finished (or nearly finished), respect Official Classification
-        // This fixes the "Sainz vs Verstappen" issue where cool-down laps confuse the distance sort
-        const isFinished = a.Status === 'FINISHED' && b.Status === 'FINISHED';
-        if (isFinished) {
+        // 1. If Race Finished (Leader has finished total laps), respect Official Classification
+        // We check if the leader (or anyone) has reached totalLaps
+        const raceFinished = positions.some(p => (p.Lap || 0) >= totalLaps && totalLaps > 0);
+        
+        if (raceFinished) {
             const posA = infoA.ClassifiedPosition || 99;
             const posB = infoB.ClassifiedPosition || 99;
-            return posA - posB;
+            // If both have valid positions, sort by them
+            if (posA !== 99 || posB !== 99) {
+                return posA - posB;
+            }
         }
 
         // 2. If Start of Race (Lap 0 or 1 and very early), respect Grid Position
         // This fixes the "Random Order at Start" issue
         const isStart = (a.Lap || 0) <= 1 && currentTime < 120; 
         if (isStart) {
-             // If both have distance < 100m, use grid
+             // If both have distance < 300m, use grid
              if ((a.Distance || 0) < 300 && (b.Distance || 0) < 300) {
                  const gridA = infoA.GridPosition || 20;
                  const gridB = infoB.GridPosition || 20;
@@ -184,7 +215,15 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         const leaderDist = leader.Distance || 0;
         const leaderLap = leader.Lap || 0;
         
+        // Check if race is over for the leader
+        const isRaceOver = totalLaps > 0 && leaderLap >= totalLaps;
+
         positions.forEach((p, i) => {
+            // Force status to FINISHED if race is over and they are classified
+            if (isRaceOver && driversInfo[p.Driver]?.ClassifiedPosition) {
+                p.Status = "FINISHED";
+            }
+
             if (p.Driver === leader.Driver) {
                 p.GapStr = "Leader";
             } else if (p.Status === "RET") {

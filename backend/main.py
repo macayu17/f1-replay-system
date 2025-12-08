@@ -238,14 +238,41 @@ def get_telemetry_replay(year: int, race_name: str):
                         pass
             weather_data = json.loads(wd.to_json(orient='records'))
 
+        # Calculate Total Laps
+        total_laps = 0
+        if hasattr(session, 'total_laps'):
+             total_laps = session.total_laps
+        elif hasattr(session, 'laps') and not session.laps.empty:
+             total_laps = int(session.laps['LapNumber'].max())
+
+        # Process Laps for all drivers (Global Laps Data)
+        all_laps_data = []
+        if hasattr(session, 'laps') and not session.laps.empty:
+            laps_df = session.laps.copy()
+            # Select relevant columns
+            laps_cols = ['Driver', 'LapTime', 'LapNumber', 'LapStartTime', 'Compound', 'TyreLife']
+            # Ensure columns exist
+            laps_cols = [c for c in laps_cols if c in laps_df.columns]
+            laps_export = laps_df[laps_cols].copy()
+            
+            # Convert Timedeltas
+            for col in ['LapTime', 'LapStartTime']:
+                if col in laps_export.columns:
+                    laps_export[col] = laps_export[col].dt.total_seconds()
+            
+            # Handle NaNs
+            laps_export = laps_export.fillna(0)
+            all_laps_data = json.loads(laps_export.to_json(orient='records'))
+
         return {
             "telemetry": all_drivers_data,
             "drivers": drivers_info,
-            "laps": laps_data,
+            "laps": all_laps_data,
             "events": events,
             "race_control": race_control,
             "circuit_info": circuit_info,
-            "weather": weather_data
+            "weather": weather_data,
+            "total_laps": total_laps
         }
 
     except Exception as e:
