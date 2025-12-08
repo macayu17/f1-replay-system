@@ -91,10 +91,17 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
                 {/* Team Color Stripe */}
                 <div className="w-1.5 h-6 rounded-full mr-2" style={{ backgroundColor: teamColor }}></div>
 
-                {/* Team Logo */}
-                {teamLogo && (
+                {/* Team Logo OR Driver Number */}
+                {teamLogo ? (
                   <div className="w-6 h-6 mr-2 flex items-center justify-center bg-white/10 rounded p-0.5">
                     <img src={teamLogo} alt={teamName} className="max-w-full max-h-full object-contain" />
+                  </div>
+                ) : (
+                  <div
+                    className="w-6 h-6 mr-2 flex items-center justify-center rounded text-[10px] font-black text-white"
+                    style={{ backgroundColor: teamColor }}
+                  >
+                    {info.DriverNumber || '?'}
                   </div>
                 )}
 

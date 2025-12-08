@@ -255,58 +255,76 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             return null;
         }).filter(Boolean);
 
+        // Calculate cumulative time for each driver from laps data
+        // This is the correct way to determine positions - not by distance
+        positions.forEach(p => {
+            const driverLaps = groupedLaps[p.Driver] || [];
+            // Get completed laps (LapTime is not null/undefined and lap has started)
+            const completedLaps = driverLaps.filter(l =>
+                l.LapTime && l.LapTime > 0 &&
+                l.LapStartTime !== null && l.LapStartTime <= currentTime
+            );
+
+            // Sum up lap times for cumulative race time
+            let cumulativeTime = 0;
+            completedLaps.forEach(l => { cumulativeTime += l.LapTime; });
+            p.CumulativeTime = cumulativeTime;
+            p.CompletedLaps = completedLaps.length;
+        });
+
         // Sort Logic
         positions.sort((a, b) => {
             const infoA = driversInfo[a.Driver] || {};
             const infoB = driversInfo[b.Driver] || {};
 
-            // 1. If Race Finished (Leader has finished total laps), respect Official Classification
-            // We check if the leader (or anyone) has reached totalLaps
-            const raceFinished = positions.some(p => (p.Lap || 0) >= totalLaps && totalLaps > 0);
+            // Retired drivers always last
+            if (a.Status === 'RET' && b.Status !== 'RET') return 1;
+            if (b.Status === 'RET' && a.Status !== 'RET') return -1;
 
-            // Also check if we are near maxTime (within 30s)
+            // 1. If Race Finished, respect Official Classification
+            const raceFinished = positions.some(p => (p.Lap || 0) >= totalLaps && totalLaps > 0);
             const nearEnd = (maxTime - currentTime) < 30;
 
             if (raceFinished || nearEnd) {
                 const posA = infoA.ClassifiedPosition || 99;
                 const posB = infoB.ClassifiedPosition || 99;
-                // If both have valid positions, sort by them
                 if (posA !== 99 || posB !== 99) {
                     return posA - posB;
                 }
             }
 
             // 2. If Start of Race (Lap 0 or 1 and very early), respect Grid Position
-            // This fixes the "Random Order at Start" issue
-            const isStart = (a.Lap || 0) <= 1 && currentTime < 120;
-            if (isStart) {
-                // If both have distance < 300m, use grid
-                if ((a.Distance || 0) < 300 && (b.Distance || 0) < 300) {
-                    const gridA = infoA.GridPosition || 20;
-                    const gridB = infoB.GridPosition || 20;
-                    return gridA - gridB;
-                }
+            const isStart = (a.Lap || 0) <= 1 && currentTime < 60;
+            if (isStart && (a.Distance || 0) < 500 && (b.Distance || 0) < 500) {
+                const gridA = infoA.GridPosition || 20;
+                const gridB = infoB.GridPosition || 20;
+                return gridA - gridB;
             }
 
-            // 3. Standard Race Sorting: Lap > Distance
+            // 3. Standard Race Sorting: Higher Lap > Lower Cumulative Time (faster)
             const lapA = a.Lap || 0;
             const lapB = b.Lap || 0;
-            if (lapA !== lapB) return lapB - lapA;
+            if (lapA !== lapB) return lapB - lapA; // More laps = better
+
+            // Same lap: who finished it first (lower cumulative time = ahead)
+            // If cumulative times are available
+            if (a.CumulativeTime && b.CumulativeTime) {
+                return a.CumulativeTime - b.CumulativeTime;
+            }
+
+            // Fallback: use distance (for when cumulative time not yet available)
             return (b.Distance || 0) - (a.Distance || 0);
         });
 
         // Calculate Gaps
         if (positions.length > 0) {
-            // Find the leader (first running or finished car)
             const leader = positions.find(p => p.Status === "RUNNING" || p.Status === "FINISHED") || positions[0];
-            const leaderDist = leader.Distance || 0;
             const leaderLap = leader.Lap || 0;
+            const leaderTime = leader.CumulativeTime || 0;
 
-            // Check if race is over for the leader
             const isRaceOver = totalLaps > 0 && leaderLap >= totalLaps;
 
             positions.forEach((p, i) => {
-                // Force status to FINISHED if race is over and they are classified
                 if (isRaceOver && driversInfo[p.Driver]?.ClassifiedPosition) {
                     p.Status = "FINISHED";
                 }
@@ -316,26 +334,26 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 } else if (p.Status === "RET") {
                     p.GapStr = "OUT";
                 } else {
-                    // Check if lapped
                     const lapDiff = leaderLap - (p.Lap || 0);
                     if (lapDiff > 0) {
                         p.GapStr = `+${lapDiff} Lap${lapDiff > 1 ? 's' : ''}`;
+                    } else if (leaderTime && p.CumulativeTime) {
+                        // Calculate time gap
+                        const timeGap = p.CumulativeTime - leaderTime;
+                        p.GapStr = `+${timeGap.toFixed(3)}s`;
                     } else {
-                        const speed = p.Speed / 3.6;
-                        const distDiff = leaderDist - (p.Distance || 0);
-                        if (speed > 1) {
-                            const timeGap = distDiff / speed;
-                            p.GapStr = `+${timeGap.toFixed(3)} s`;
-                        } else {
-                            p.GapStr = `+${distDiff.toFixed(0)} m`;
-                        }
+                        // Fallback to distance-based estimation
+                        const distDiff = (leader.Distance || 0) - (p.Distance || 0);
+                        const speed = (p.Speed || 100) / 3.6;
+                        const timeGap = speed > 1 ? distDiff / speed : distDiff / 50;
+                        p.GapStr = `+${Math.abs(timeGap).toFixed(3)}s`;
                     }
                 }
             });
         }
 
         return positions;
-    }, [groupedTelemetry, currentTime, driversInfo, laps]);
+    }, [groupedTelemetry, groupedLaps, currentTime, driversInfo, laps, totalLaps, maxTime]);
 
     // Update standings state for Leaderboard
     useEffect(() => {
@@ -590,23 +608,29 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
 
     // Race Control Status (Flags)
     const currentStatus = useMemo(() => {
-        // Check Race Control Messages first for Red/Yellow flags
-        // We look for the latest message <= currentTime
+        // Check Race Control Messages first for Red/Yellow flags and SC
         const recentMsgs = raceControl.filter(m => m.Time <= currentTime);
         const lastMsg = recentMsgs[recentMsgs.length - 1];
 
         if (lastMsg) {
-            if (lastMsg.Message.includes("RED FLAG")) return { type: 'RED', text: 'RED FLAG' };
-            if (lastMsg.Flag === 'Red') return { type: 'RED', text: 'RED FLAG' };
-            // Yellow flags are often sector specific, but let's show global if "Yellow Flag"
-            if (lastMsg.Message.includes("YELLOW FLAG")) return { type: 'YELLOW', text: 'YELLOW FLAG' };
+            const msg = (lastMsg.Message || '').toUpperCase();
+            if (msg.includes("RED FLAG") || lastMsg.Flag === 'Red') return { type: 'RED', text: 'RED FLAG' };
+            if (msg.includes("YELLOW FLAG")) return { type: 'YELLOW', text: 'YELLOW FLAG' };
+            // Check for SC messages in race control
+            if (msg.includes("SAFETY CAR DEPLOYED") || msg.includes("SAFETY CAR IN THIS LAP")) return { type: 'SC', text: 'SAFETY CAR' };
+            if (msg.includes("VIRTUAL SAFETY CAR") || msg.includes("VSC DEPLOYED")) return { type: 'VSC', text: 'VIRTUAL SAFETY CAR' };
         }
 
-        // Check Track Status (SC/VSC)
+        // Check Track Status (SC/VSC) - FastF1 uses various formats
         const activeEvent = events.filter(e => e.Time <= currentTime).pop();
         if (activeEvent) {
-            if (activeEvent.Status === '4' || activeEvent.Status === 'SC') return { type: 'SC', text: 'SAFETY CAR' };
-            if (activeEvent.Status === '6' || activeEvent.Status === 'VSC') return { type: 'VSC', text: 'VIRTUAL SAFETY CAR' };
+            const status = String(activeEvent.Status).toUpperCase();
+            // Status codes: 1=Track Clear, 2=Yellow, 4=SC, 5=Red, 6=VSC, 7=SC Ending
+            if (status === '4' || status === 'SC' || status === 'SAFETYCAR') return { type: 'SC', text: 'SAFETY CAR' };
+            if (status === '6' || status === 'VSC' || status === 'VIRTUALSAFETYCAR') return { type: 'VSC', text: 'VIRTUAL SAFETY CAR' };
+            if (status === '7' || status.includes('ENDING')) return { type: 'SC', text: 'SAFETY CAR ENDING' };
+            if (status === '5' || status === 'RED') return { type: 'RED', text: 'RED FLAG' };
+            if (status === '2' || status === 'YELLOW') return { type: 'YELLOW', text: 'YELLOW FLAG' };
         }
 
         return null;

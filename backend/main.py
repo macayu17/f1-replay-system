@@ -288,7 +288,7 @@ def get_telemetry_replay(year: int, race_name: str):
         return {
             "telemetry": all_drivers_data,
             "drivers": drivers_info,
-            "laps": all_laps_data,
+            "laps": laps_data,  # Changed from all_laps_data - this includes sector times and pit times
             "events": events,
             "race_control": race_control,
             "circuit_info": circuit_info,
