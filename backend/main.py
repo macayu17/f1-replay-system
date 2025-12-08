@@ -59,13 +59,21 @@ def get_races(year: int):
 def get_telemetry_replay(year: int, race_name: str):
     try:
         # Load the session
+        print(f"Loading session for {year} {race_name}...")
         session = fastf1.get_session(year, race_name, 'R')
-        session.load()
+        
+        # Optimization: Load only necessary data first
+        # telemetry=True is heavy. If it fails, we might need to optimize.
+        session.load(telemetry=True, laps=True, weather=True)
+        print("Session loaded successfully.")
         
         drivers = session.drivers
         all_drivers_data = []
         
         print(f"Processing {len(drivers)} drivers for {year} {race_name}...")
+
+        # Limit drivers for debugging/performance if needed (e.g. first 5)
+        # drivers = drivers[:5] 
 
         for driver in drivers:
             try:
@@ -107,9 +115,10 @@ def get_telemetry_replay(year: int, race_name: str):
                                     on='Time', 
                                     direction='backward')
                 
-                # Resample to 1 second frequency to reduce data size
+                # Resample to 2 second frequency to reduce data size (was 1S)
+                # This cuts the data size in half, helping with memory and network
                 tel = tel.set_index('Time')
-                resampled = tel.resample('1S').first().reset_index()
+                resampled = tel.resample('2S').first().reset_index()
                 
                 # Select relevant columns
                 cols_to_keep = ['Time', 'X', 'Y', 'Speed', 'Compound', 'Distance', 'Throttle', 'Brake', 'nGear', 'RPM', 'DRS']
@@ -126,11 +135,19 @@ def get_telemetry_replay(year: int, race_name: str):
                 records = json.loads(final_df.to_json(orient='records'))
                 all_drivers_data.extend(records)
                 
-                print(f"Processed {driver}")
+                print(f"Processed {driver} - {len(records)} points")
+                
+                # Explicitly clear large variables to help GC
+                del tel
+                del resampled
+                del final_df
+                del records
                 
             except Exception as e:
                 print(f"Error processing driver {driver}: {e}")
                 continue
+        
+        print(f"Finished processing all drivers. Total points: {len(all_drivers_data)}")
         
         # Extract Driver Info
         drivers_info = {}
