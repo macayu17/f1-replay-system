@@ -222,6 +222,12 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             // Fix: Ensure Lap doesn't start at 0 if race has started
             if (!point.Lap || point.Lap < 1) point.Lap = 1;
 
+            // Safety check for invalid coordinates
+            if (point.X === null || point.X === undefined || isNaN(point.X) || 
+                point.Y === null || point.Y === undefined || isNaN(point.Y)) {
+                return null;
+            }
+
             return point;
         }
         return null;
