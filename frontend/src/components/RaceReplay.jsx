@@ -79,13 +79,9 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                     // The winner is the first one to finish
                     const winnerFinishTime = Math.min(...finishTimes);
                     
-                    // Set max time to winner finish + 60 seconds (to see others finish)
-                    // But ensure we don't exceed the actual data max
+                    // Set max time to winner finish + 10 seconds (strict cut-off)
                     if (winnerFinishTime > 0) {
-                        const calculatedMax = winnerFinishTime + 60;
-                        if (calculatedMax < max) {
-                            max = calculatedMax;
-                        }
+                        max = winnerFinishTime + 10;
                     }
                 }
             }
@@ -173,6 +169,8 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 point.Lap = point.LapNumber;
             } else if (laps && laps.length > 0) {
                 const driverLaps = laps.filter(l => l.Driver === driver);
+                // Find the lap where LapStartTime <= currentTime
+                // We need the LAST one that satisfies this
                 const currentLapData = driverLaps.filter(l => l.LapStartTime <= currentTime).pop();
                 point.Lap = currentLapData ? currentLapData.LapNumber : 1; 
             }
@@ -194,7 +192,10 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         // We check if the leader (or anyone) has reached totalLaps
         const raceFinished = positions.some(p => (p.Lap || 0) >= totalLaps && totalLaps > 0);
         
-        if (raceFinished) {
+        // Also check if we are near maxTime (within 30s)
+        const nearEnd = (maxTime - currentTime) < 30;
+
+        if (raceFinished || nearEnd) {
             const posA = infoA.ClassifiedPosition || 99;
             const posB = infoB.ClassifiedPosition || 99;
             // If both have valid positions, sort by them

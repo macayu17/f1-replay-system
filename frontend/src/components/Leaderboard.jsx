@@ -24,6 +24,7 @@ const TEAM_LOGOS = {
     'Williams': 'https://upload.wikimedia.org/wikipedia/en/3/39/Williams_F1_logo_2020.svg',
     'Haas F1 Team': 'https://upload.wikimedia.org/wikipedia/commons/d/d4/Haas_F1_Team_logo.svg',
     'Kick Sauber': 'https://upload.wikimedia.org/wikipedia/commons/2/2c/Kick_Sauber_logo.svg',
+    'Sauber': 'https://upload.wikimedia.org/wikipedia/commons/2/2c/Kick_Sauber_logo.svg',
     'RB': 'https://upload.wikimedia.org/wikipedia/en/2/2b/Visa_Cash_App_RB_Formula_One_Team_Logo.svg',
     'AlphaTauri': 'https://upload.wikimedia.org/wikipedia/en/2/2b/Visa_Cash_App_RB_Formula_One_Team_Logo.svg',
     'Alfa Romeo': 'https://upload.wikimedia.org/wikipedia/commons/2/2c/Kick_Sauber_logo.svg'
