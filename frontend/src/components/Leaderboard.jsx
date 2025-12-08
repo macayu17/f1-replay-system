@@ -30,21 +30,34 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick }) => {
             const tyre = driver.Compound || 'UNKNOWN';
             const tyreClass = TYRE_COLORS[tyre.toUpperCase()] || TYRE_COLORS['UNKNOWN'];
             const isRetired = driver.Status === 'RET';
+            const isFinished = driver.Status === 'FINISHED';
             const gap = index === 0 ? 'Leader' : (isRetired ? 'OUT' : driver.GapStr);
+
+            let rowClass = `flex items-center h-10 border-b border-gray-800 hover:bg-gray-800 cursor-pointer transition-all group relative overflow-hidden ${isRetired ? 'opacity-50 grayscale' : ''}`;
+            
+            // Podium Highlight
+            if (isFinished) {
+                if (index === 0) rowClass += " bg-yellow-500/20 border-l-4 border-l-yellow-500"; // Gold
+                else if (index === 1) rowClass += " bg-gray-400/20 border-l-4 border-l-gray-400"; // Silver
+                else if (index === 2) rowClass += " bg-orange-700/20 border-l-4 border-l-orange-700"; // Bronze
+                else rowClass += " bg-green-900/20 border-l-4 border-l-green-900"; // Other finishers
+            }
 
             return (
               <div 
                 key={driver.Driver}
                 onClick={() => onDriverClick(driver.Driver)}
-                className={`flex items-center h-10 border-b border-gray-800 hover:bg-gray-800 cursor-pointer transition-all group relative overflow-hidden ${isRetired ? 'opacity-50 grayscale' : ''}`}
+                className={rowClass}
               >
                 {/* Hover Effect */}
                 <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
 
                 {/* Position */}
-                <div className="w-10 text-center font-bold text-gray-300 text-lg italic">{index + 1}</div>
+                <div className={`w-10 text-center font-bold text-lg italic ${isFinished && index < 3 ? 'text-white scale-110' : 'text-gray-300'}`}>
+                    {isFinished && index === 0 ? '🏆' : index + 1}
+                </div>
                 
-                {/* Team Color Stripe */}
+                {/* Team Color Stripe (Hide if podium to avoid clash, or keep?) Keep it. */}
                 <div className="w-1.5 h-6 rounded-full mr-2" style={{ backgroundColor: teamColor }}></div>
                 
                 {/* Driver Name */}

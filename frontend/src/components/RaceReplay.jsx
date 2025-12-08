@@ -112,17 +112,30 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         
         if (idx !== -1) {
             const point = { ...data[idx] };
-            // Check if driver has stopped updating (Retired?)
-            // If the last data point is significantly older than currentTime (e.g. > 20s)
-            // AND it is the LAST point in their telemetry
+            
+            // Determine Status
             const isLastPoint = idx === data.length - 1;
             const timeDiff = currentTime - point.Time;
+            const driverInfo = driversInfo[driver];
+            const officialStatus = driverInfo?.Status || 'Finished';
             
-            if (isLastPoint && timeDiff > 20) {
-                point.Status = "RET";
+            if (isLastPoint && timeDiff > 2) {
+                if (officialStatus === 'Finished' || officialStatus.includes('Lap')) {
+                     point.Status = "FINISHED";
+                } else {
+                     point.Status = "RET";
+                }
             } else {
                 point.Status = "RUNNING";
             }
+
+            // Determine Current Lap
+            if (laps && laps.length > 0) {
+                const driverLaps = laps.filter(l => l.Driver === driver);
+                const currentLapData = driverLaps.filter(l => l.LapStartTime <= currentTime).pop();
+                point.Lap = currentLapData ? currentLapData.LapNumber : 0; // 0 means grid/formation
+            }
+
             return point;
         }
         return null;
@@ -133,8 +146,8 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
 
     // Calculate Gaps
     if (positions.length > 0) {
-        // Find the leader (first running car)
-        const leader = positions.find(p => p.Status === "RUNNING") || positions[0];
+        // Find the leader (first running or finished car)
+        const leader = positions.find(p => p.Status === "RUNNING" || p.Status === "FINISHED") || positions[0];
         const leaderDist = leader.Distance || 0;
         
         positions.forEach((p, i) => {
@@ -156,7 +169,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
     }
 
     return positions;
-  }, [groupedTelemetry, currentTime]);
+  }, [groupedTelemetry, currentTime, driversInfo, laps]);
 
   // Update standings state for Leaderboard
   useEffect(() => {
@@ -407,10 +420,16 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
 
                     <svg ref={svgRef} viewBox="0 0 800 500" className="bg-transparent w-full h-full relative z-10" />
                     
-                    {/* Session Time */}
-                    <div className="absolute top-4 right-4 text-white font-mono bg-black/80 border border-gray-700 p-3 rounded shadow-lg z-20 backdrop-blur">
-                        <div className="text-[10px] text-gray-400 uppercase tracking-wider">Session Time</div>
-                        <div className="text-2xl text-rbr-red font-bold tabular-nums">{new Date(currentTime * 1000).toISOString().substr(11, 8)}</div>
+                    {/* Session Time & Lap */}
+                    <div className="absolute top-4 right-4 flex flex-col gap-2 z-20">
+                        <div className="text-white font-mono bg-black/80 border border-gray-700 p-3 rounded shadow-lg backdrop-blur min-w-[100px]">
+                            <div className="text-[10px] text-gray-400 uppercase tracking-wider">Session Time</div>
+                            <div className="text-2xl text-rbr-red font-bold tabular-nums">{new Date(currentTime * 1000).toISOString().substr(11, 8)}</div>
+                        </div>
+                        <div className="text-white font-mono bg-black/80 border border-gray-700 p-3 rounded shadow-lg backdrop-blur min-w-[100px]">
+                            <div className="text-[10px] text-gray-400 uppercase tracking-wider">Lap</div>
+                            <div className="text-2xl text-white font-bold tabular-nums">{standings[0]?.Lap || 0}</div>
+                        </div>
                     </div>
 
                     {/* Driver Details Modal */}
