@@ -68,29 +68,12 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 setLaps(res.data.laps || [])
                 setTotalLaps(res.data.total_laps || 0)
 
-                if (data.length > 0) {
-                    // Initialize start time based on Laps data if available, to avoid pre-race telemetry
-                    // Find the earliest Lap 1 Start Time
-                    const fetchedLaps = res.data.laps || [];
-                    let min = d3.min(data, d => d.Time);
-                    let startAt = min;
-
-                    if (fetchedLaps.length > 0) {
-                        const lap1Starts = fetchedLaps
-                            .filter(l => l.LapNumber === 1 && l.LapStartTime !== null && l.LapStartTime !== undefined)
-                            .map(l => l.LapStartTime);
-
-                        if (lap1Starts.length > 0) {
-                            const raceStart = Math.min(...lap1Starts);
-                            // Set default start time to 5 seconds before race start
-                            // But keep 'min' as the absolute minimum so user can scrub back
-                            if (raceStart > 0) {
-                                startAt = Math.max(min, raceStart - 5);
-                            }
-                        }
-                    }
-
-                    let max = d3.max(data, d => d.Time)
+        if (data.length > 0) {
+            // Use the minimum time from telemetry data directly
+            // The backend already aligns everything correctly
+            const fetchedLaps = res.data.laps || [];
+            let min = d3.min(data, d => d.Time);
+            let startAt = min;                    let max = d3.max(data, d => d.Time)
 
                     // Calculate Race End Time (Winner's Finish Time)
                     const totalLaps = res.data.total_laps || 0;
@@ -680,7 +663,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                         <div className="flex items-center gap-4">
                             <img src="https://upload.wikimedia.org/wikipedia/commons/3/33/F1.svg" alt="F1" className="h-6 bg-white p-1 rounded" />
                             <h1 className="text-xl font-black italic tracking-tighter uppercase">
-                                <span className="text-rbr-red">Oracle</span> Red Bull Racing <span className="text-gray-500 text-sm not-italic font-normal">| Post-Race Analytics</span>
+                                <span className="text-rbr-red">Grid</span>Pulse <span className="text-gray-500 text-sm not-italic font-normal">| Post-Race Analytics</span>
                             </h1>
                         </div>
                         <div className="text-xs font-mono text-gray-500">
