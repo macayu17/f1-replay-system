@@ -68,6 +68,17 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 setLaps(res.data.laps || [])
                 setTotalLaps(res.data.total_laps || 0)
 
+                // DEBUG: Log the actual data to understand the issue
+                console.log('=== DEBUG LAP DATA ===');
+                console.log('Total Laps:', res.data.total_laps);
+                console.log('Sample Laps Data (first 5):', res.data.laps?.slice(0, 5));
+                console.log('Sample Telemetry (first 3 points):', data.slice(0, 3));
+                console.log('Time Range:', {
+                    min: d3.min(data, d => d.Time),
+                    max: d3.max(data, d => d.Time)
+                });
+                console.log('======================');
+
         if (data.length > 0) {
             // Use the minimum time from telemetry data directly
             // The backend already aligns everything correctly
