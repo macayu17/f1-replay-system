@@ -198,34 +198,13 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 }
 
                 // Determine Current Lap
-                // Priority: 
-                // 1. Telemetry LapNumber (most complete, comes from telemetry merge)
-                // 2. Laps data LapStartTime (for validation)
-                // 3. Default to 1
-
-                // First use telemetry LapNumber if available
-                if (point.LapNumber !== undefined && point.LapNumber !== null && point.LapNumber >= 1) {
-                    point.Lap = point.LapNumber;
-                } else if (groupedLaps[driver]) {
-                    // Fallback to laps data 
-                    const startedLaps = groupedLaps[driver].filter(l =>
-                        l.LapStartTime !== null &&
-                        l.LapStartTime !== undefined &&
-                        l.LapStartTime <= currentTime
-                    );
-                    const currentLapData = startedLaps[startedLaps.length - 1];
-
-                    if (currentLapData) {
-                        point.Lap = currentLapData.LapNumber;
-                    } else {
-                        point.Lap = 1;
-                    }
+                // Use LapNumber directly from telemetry - it comes from FastF1's official data
+                // The backend merges this from session.laps which is authoritative
+                if (point.LapNumber !== undefined && point.LapNumber !== null) {
+                    point.Lap = Math.max(1, point.LapNumber); // Ensure minimum of 1
                 } else {
                     point.Lap = 1;
                 }
-
-                // Ensure Lap doesn't start at 0 or go negative
-                if (!point.Lap || point.Lap < 1) point.Lap = 1;
 
                 // Safety check for invalid coordinates
                 if (point.X === null || point.X === undefined || isNaN(point.X) ||
