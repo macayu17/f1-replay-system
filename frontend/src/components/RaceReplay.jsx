@@ -73,18 +73,30 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 console.log('Total Laps:', res.data.total_laps);
                 console.log('Sample Laps Data (first 5):', res.data.laps?.slice(0, 5));
                 console.log('Sample Telemetry (first 3 points):', data.slice(0, 3));
+                
+                // Find when actual racing starts (Lap 2 begins)
+                const lap2Start = res.data.laps?.find(l => l.LapNumber === 2)?.LapStartTime;
+                console.log('Lap 2 Start Time:', lap2Start);
+                
                 console.log('Time Range:', {
                     min: d3.min(data, d => d.Time),
-                    max: d3.max(data, d => d.Time)
+                    max: d3.max(data, d => d.Time),
+                    raceStart: lap2Start
                 });
                 console.log('======================');
 
         if (data.length > 0) {
-            // Use the minimum time from telemetry data directly
-            // The backend already aligns everything correctly
             const fetchedLaps = res.data.laps || [];
             let min = d3.min(data, d => d.Time);
-            let startAt = min;                    let max = d3.max(data, d => d.Time)
+            let startAt = min;
+            
+            // Start the replay at the beginning of Lap 2 (actual race start)
+            // Lap 1 is formation/parade lap
+            const lap2StartTime = fetchedLaps.find(l => l.LapNumber === 2)?.LapStartTime;
+            if (lap2StartTime && lap2StartTime > min) {
+                startAt = lap2StartTime - 5; // Start 5 seconds before Lap 2
+                console.log('Setting start time to Lap 2:', startAt);
+            }                    let max = d3.max(data, d => d.Time)
 
                     // Calculate Race End Time (Winner's Finish Time)
                     const totalLaps = res.data.total_laps || 0;
