@@ -30,6 +30,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
     const [totalLaps, setTotalLaps] = useState(0)
     const [showPodium, setShowPodium] = useState(false) // Podium display state
     const [currentLap, setCurrentLap] = useState(1) // Current lap counter
+    const [raceStartTime, setRaceStartTime] = useState(0) // Time when race actually started (Lap 1)
 
     const svgRef = useRef()
 
@@ -90,40 +91,43 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                     let min = d3.min(data, d => d.Time);
                     let startAt = min;
 
-                    // Start the replay at the beginning of Lap 2 (actual race start)
-                    // Lap 1 is formation/parade lap
+                    // Find the start of Lap 1 (race start) - this is our reference for elapsed time
+                    const lap1StartTime = fetchedLaps.find(l => l.LapNumber === 1)?.LapStartTime;
+                    const raceStart = lap1StartTime || min;
+                    setRaceStartTime(raceStart);
+                    console.log('Race start time (Lap 1):', raceStart);
+
+                    // Start the replay at the beginning of Lap 2 (after formation/parade lap)
                     const lap2StartTime = fetchedLaps.find(l => l.LapNumber === 2)?.LapStartTime;
                     if (lap2StartTime && lap2StartTime > min) {
                         startAt = lap2StartTime - 5; // Start 5 seconds before Lap 2
                         console.log('Setting start time to Lap 2:', startAt);
-                    } let max = d3.max(data, d => d.Time)
+                    }
+
+                    let max = d3.max(data, d => d.Time);
 
                     // Calculate Race End Time (Winner's Finish Time)
-                    const totalLaps = res.data.total_laps || 0;
+                    const totalLapsFromData = res.data.total_laps || 0;
 
-                    if (totalLaps > 0 && fetchedLaps.length > 0) {
+                    if (totalLapsFromData > 0 && fetchedLaps.length > 0) {
                         // Find laps that are the final lap
-                        const finalLaps = fetchedLaps.filter(l => l.LapNumber === totalLaps);
+                        const finalLaps = fetchedLaps.filter(l => l.LapNumber === totalLapsFromData);
                         if (finalLaps.length > 0) {
-                            // Calculate finish times (StartTime + LapTime)
-                            const finishTimes = finalLaps.map(l => (l.LapStartTime || 0) + (l.LapTime || 0));
-                            // The winner is the first one to finish
-                            const winnerFinishTime = Math.min(...finishTimes);
+                            // Calculate finish times (StartTime + LapTime) - only for valid entries
+                            const validFinishTimes = finalLaps
+                                .filter(l => l.LapStartTime && l.LapTime && l.LapTime > 0)
+                                .map(l => l.LapStartTime + l.LapTime);
 
-                            // Only clamp max time if winnerFinishTime is reasonable (e.g. > startAt)
-                            // And ensure we don't cut off too much if data continues
-                            if (winnerFinishTime > startAt) {
-                                // Use the later of (Winner + 30s) or (Max Data Time - 60s)
-                                // This prevents cutting off the race if totalLaps is wrong (too small)
-                                // But still tries to stop near the end
-                                // Actually, let's just trust the data max unless it's WAY longer
+                            if (validFinishTimes.length > 0) {
+                                // The winner is the first one to finish
+                                const winnerFinishTime = Math.min(...validFinishTimes);
+                                console.log('Winner finish time:', winnerFinishTime);
 
-                                // If winner finishes at T=5000, and data goes to T=6000, maybe we stop at 5060.
-                                // But if winner finishes at T=2000 (wrong totalLaps), and data goes to T=6000, we shouldn't stop at 2060.
-
-                                // Heuristic: If winnerFinishTime is within 5 minutes of max data, use it.
-                                if (max - winnerFinishTime < 300) {
-                                    max = winnerFinishTime + 30;
+                                // Cap the max time to winner's finish + 60 seconds (for cooldown lap display)
+                                // This prevents the replay from running indefinitely
+                                if (winnerFinishTime > startAt && winnerFinishTime < max) {
+                                    max = winnerFinishTime + 60; // 60 seconds after winner finishes
+                                    console.log('Capping max time to:', max);
                                 }
                             }
                         }
@@ -785,8 +789,17 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                                 {/* Session Time & Lap */}
                                 <div className="absolute top-4 right-4 flex flex-col gap-2 z-20">
                                     <div className="text-white font-mono bg-black/80 border border-gray-700 p-3 rounded shadow-lg backdrop-blur min-w-[100px]">
-                                        <div className="text-[10px] text-gray-400 uppercase tracking-wider">Session Time</div>
-                                        <div className="text-2xl text-rbr-red font-bold tabular-nums">{new Date(currentTime * 1000).toISOString().substr(11, 8)}</div>
+                                        <div className="text-[10px] text-gray-400 uppercase tracking-wider">Race Time</div>
+                                        <div className="text-2xl text-rbr-red font-bold tabular-nums">
+                                            {(() => {
+                                                // Calculate elapsed time from race start (Lap 1)
+                                                const elapsed = Math.max(0, currentTime - raceStartTime);
+                                                const hours = Math.floor(elapsed / 3600);
+                                                const minutes = Math.floor((elapsed % 3600) / 60);
+                                                const seconds = Math.floor(elapsed % 60);
+                                                return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                                            })()}
+                                        </div>
                                     </div>
                                     <div className="text-white font-mono bg-black/80 border border-gray-700 p-3 rounded shadow-lg backdrop-blur min-w-[100px]">
                                         <div className="text-[10px] text-gray-400 uppercase tracking-wider">Lap</div>
