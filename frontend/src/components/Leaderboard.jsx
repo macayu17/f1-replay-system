@@ -136,19 +136,16 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
                 {/* Team Color Stripe */}
                 <div className="w-1.5 h-6 rounded-full mr-2" style={{ backgroundColor: teamColor }}></div>
 
-                {/* Team Logo OR Driver Number */}
-                {teamLogo ? (
-                  <div className="w-6 h-6 mr-2 flex items-center justify-center bg-white/10 rounded p-0.5">
-                    <img src={teamLogo} alt={teamName} className="max-w-full max-h-full object-contain" />
-                  </div>
-                ) : (
-                  <div
-                    className="w-6 h-6 mr-2 flex items-center justify-center rounded text-[10px] font-black text-white"
-                    style={{ backgroundColor: teamColor }}
-                  >
-                    {info.DriverNumber || '?'}
-                  </div>
-                )}
+                {/* Driver Number Badge (F1 TV Style) */}
+                <div
+                  className="w-8 h-6 mr-2 flex items-center justify-center rounded text-[11px] font-black text-white shadow-md"
+                  style={{
+                    backgroundColor: teamColor,
+                    border: '1px solid rgba(255,255,255,0.2)'
+                  }}
+                >
+                  {info.DriverNumber || driver.Driver}
+                </div>
 
                 {/* Driver Name */}
                 <div className="flex-1 font-bold text-white truncate flex flex-col justify-center leading-tight">

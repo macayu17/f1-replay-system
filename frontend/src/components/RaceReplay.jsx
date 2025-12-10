@@ -399,11 +399,25 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
     // Calculate current lap based on elapsed session time
     // This is more reliable than using standings[0].Lap which can be inconsistent
     useEffect(() => {
-        if (!lapStartTimes || Object.keys(lapStartTimes).length === 0) {
-            // Fallback to standings if no lap start times available
-            if (standings.length > 0 && standings[0]?.Lap) {
-                setCurrentLap(standings[0].Lap);
+        // DEBUG: Log lap start times on first load
+        if (lapStartTimes && Object.keys(lapStartTimes).length > 0) {
+            console.log('=== LAP TIMING DEBUG ===');
+            console.log('currentTime:', currentTime);
+            console.log('lapStartTimes (first 5):', Object.entries(lapStartTimes).slice(0, 5));
+        }
+
+        // Primary method: Use leader's lap from standings (most accurate)
+        if (standings.length > 0 && standings[0]?.Lap && standings[0].Lap > 0) {
+            const leaderLap = standings[0].Lap;
+            if (leaderLap !== currentLap) {
+                console.log('Setting lap from leader:', leaderLap);
+                setCurrentLap(leaderLap);
             }
+            return;
+        }
+
+        // Fallback: Calculate from lap start times
+        if (!lapStartTimes || Object.keys(lapStartTimes).length === 0) {
             return;
         }
 
@@ -411,7 +425,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         let calculatedLap = 1;
         const sortedLaps = Object.entries(lapStartTimes)
             .map(([lap, time]) => ({ lap: parseInt(lap), time }))
-            .filter(({ lap }) => lap > 0) // Filter out invalid lap numbers
+            .filter(({ lap, time }) => lap > 0 && time !== null && time !== undefined)
             .sort((a, b) => a.lap - b.lap);
 
         for (const { lap, time } of sortedLaps) {
@@ -427,8 +441,11 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             calculatedLap = totalLaps;
         }
 
-        setCurrentLap(calculatedLap);
-    }, [currentTime, lapStartTimes, totalLaps, standings]);
+        if (calculatedLap !== currentLap) {
+            console.log('Setting lap from calculation:', calculatedLap, 'currentTime:', currentTime);
+            setCurrentLap(calculatedLap);
+        }
+    }, [currentTime, lapStartTimes, totalLaps, standings, currentLap]);
 
     // Fastest lap detection
     const fastestLapInfo = useMemo(() => {
@@ -620,19 +637,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
 
     // Race Control Status (Flags) - Improved detection
     const currentStatus = useMemo(() => {
-        // Check Race Control Messages first for Red/Yellow flags and SC
-        const recentMsgs = raceControl.filter(m => m.Time <= currentTime);
-        const lastMsg = recentMsgs[recentMsgs.length - 1];
-
-        if (lastMsg) {
-            const msg = (lastMsg.Message || '').toUpperCase();
-            if (msg.includes("RED FLAG") || lastMsg.Flag === 'Red') return { type: 'RED', text: 'RED FLAG' };
-            if (msg.includes("YELLOW FLAG")) return { type: 'YELLOW', text: 'YELLOW FLAG' };
-            if (msg.includes("SAFETY CAR DEPLOYED") || msg.includes("SAFETY CAR IN THIS LAP")) return { type: 'SC', text: 'SAFETY CAR' };
-            if (msg.includes("VIRTUAL SAFETY CAR") || msg.includes("VSC DEPLOYED")) return { type: 'VSC', text: 'VIRTUAL SAFETY CAR' };
-        }
-
-        // Check Track Status with proper numeric code handling
+        // Check Track Status FIRST for the authoritative status
         if (events && events.length > 0) {
             // Find the most recent event at or before currentTime using reverse search
             let activeEvent = null;
@@ -647,8 +652,17 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 // FastF1 track_status Status field - can be numeric or string
                 const status = String(activeEvent.Status || '').trim();
 
+                // DEBUG: Log current track status
+                // console.log('Track Status:', status, 'at time:', currentTime, 'event time:', activeEvent.Time);
+
                 // Status codes from FastF1/FIA:
                 // 1 = AllClear/Green, 2 = Yellow, 4 = SCDeployed, 5 = Red, 6 = VSC, 7 = SCEnding
+
+                // Explicitly return null for "All Clear" status - track is green
+                if (status === '1' || status.toUpperCase() === 'ALLCLEAR' || status.toUpperCase() === 'GREEN') {
+                    return null;  // Track is clear, no flag to display
+                }
+
                 switch (status) {
                     case '4': return { type: 'SC', text: 'SAFETY CAR' };
                     case '6': return { type: 'VSC', text: 'VIRTUAL SAFETY CAR' };
@@ -663,14 +677,20 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 if (statusUpper === 'VSC' || statusUpper === 'VIRTUALSAFETYCAR') return { type: 'VSC', text: 'VIRTUAL SAFETY CAR' };
                 if (statusUpper === 'RED') return { type: 'RED', text: 'RED FLAG' };
                 if (statusUpper === 'YELLOW') return { type: 'YELLOW', text: 'YELLOW FLAG' };
-
-                // Check Message field for additional context
-                const message = String(activeEvent.Message || '').toUpperCase();
-                if (message.includes('SAFETY CAR') && !message.includes('VIRTUAL')) return { type: 'SC', text: 'SAFETY CAR' };
-                if (message.includes('VSC') || message.includes('VIRTUAL SAFETY CAR')) return { type: 'VSC', text: 'VIRTUAL SAFETY CAR' };
-                if (message.includes('RED FLAG')) return { type: 'RED', text: 'RED FLAG' };
-                if (message.includes('YELLOW FLAG')) return { type: 'YELLOW', text: 'YELLOW FLAG' };
             }
+        }
+
+        // Fallback: Check Race Control Messages for explicit flag announcements
+        // Only use this if no track status events are available
+        const recentMsgs = raceControl.filter(m => m.Time <= currentTime && m.Time > currentTime - 30);  // Within last 30 seconds
+        const lastMsg = recentMsgs[recentMsgs.length - 1];
+
+        if (lastMsg) {
+            const msg = (lastMsg.Message || '').toUpperCase();
+            // Only trigger on explicit statements, not mentions
+            if (msg.includes("RED FLAG")) return { type: 'RED', text: 'RED FLAG' };
+            if (msg.includes("SAFETY CAR DEPLOYED")) return { type: 'SC', text: 'SAFETY CAR' };
+            if (msg.includes("VSC DEPLOYED") || msg.includes("VIRTUAL SAFETY CAR DEPLOYED")) return { type: 'VSC', text: 'VIRTUAL SAFETY CAR' };
         }
 
         return null;
