@@ -15,20 +15,65 @@ const TYRE_COLORS = {
 };
 
 const TEAM_LOGOS = {
-  'Red Bull Racing': 'https://upload.wikimedia.org/wikipedia/en/4/41/Oracle_Red_Bull_Racing_logo.svg',
-  'McLaren': 'https://upload.wikimedia.org/wikipedia/en/6/66/McLaren_Racing_logo.svg',
-  'Ferrari': 'https://upload.wikimedia.org/wikipedia/en/c/c0/Scuderia_Ferrari_Logo.svg',
-  'Mercedes': 'https://upload.wikimedia.org/wikipedia/commons/f/fb/Mercedes_AMG_Petronas_F1_Logo.svg',
-  'Aston Martin': 'https://upload.wikimedia.org/wikipedia/en/b/bd/Aston_Martin_Lagonda_brand_logo.svg',
-  'Alpine': 'https://upload.wikimedia.org/wikipedia/en/2/26/Alpine_F1_Team_Logo.svg',
-  'Williams': 'https://upload.wikimedia.org/wikipedia/en/3/39/Williams_F1_logo_2020.svg',
-  'Haas F1 Team': 'https://upload.wikimedia.org/wikipedia/commons/d/d4/Haas_F1_Team_logo.svg',
-  'Kick Sauber': 'https://upload.wikimedia.org/wikipedia/commons/2/2c/Kick_Sauber_logo.svg',
-  'Sauber': 'https://upload.wikimedia.org/wikipedia/commons/2/2c/Kick_Sauber_logo.svg',
-  'RB': 'https://upload.wikimedia.org/wikipedia/en/2/2b/Visa_Cash_App_RB_Formula_One_Team_Logo.svg',
-  'AlphaTauri': 'https://upload.wikimedia.org/wikipedia/en/2/2b/Visa_Cash_App_RB_Formula_One_Team_Logo.svg',
-  'Alfa Romeo': 'https://upload.wikimedia.org/wikipedia/commons/2/2c/Kick_Sauber_logo.svg'
+  // Red Bull variants
+  'Red Bull Racing': 'https://media.formula1.com/content/dam/fom-website/teams/2024/red-bull-racing-logo.png.transform/2col/image.png',
+  'Red Bull': 'https://media.formula1.com/content/dam/fom-website/teams/2024/red-bull-racing-logo.png.transform/2col/image.png',
+  // McLaren
+  'McLaren': 'https://media.formula1.com/content/dam/fom-website/teams/2024/mclaren-logo.png.transform/2col/image.png',
+  // Ferrari  
+  'Ferrari': 'https://media.formula1.com/content/dam/fom-website/teams/2024/ferrari-logo.png.transform/2col/image.png',
+  'Scuderia Ferrari': 'https://media.formula1.com/content/dam/fom-website/teams/2024/ferrari-logo.png.transform/2col/image.png',
+  // Mercedes
+  'Mercedes': 'https://media.formula1.com/content/dam/fom-website/teams/2024/mercedes-logo.png.transform/2col/image.png',
+  // Aston Martin
+  'Aston Martin': 'https://media.formula1.com/content/dam/fom-website/teams/2024/aston-martin-logo.png.transform/2col/image.png',
+  // Alpine
+  'Alpine': 'https://media.formula1.com/content/dam/fom-website/teams/2024/alpine-logo.png.transform/2col/image.png',
+  // Williams
+  'Williams': 'https://media.formula1.com/content/dam/fom-website/teams/2024/williams-logo.png.transform/2col/image.png',
+  // Haas
+  'Haas': 'https://media.formula1.com/content/dam/fom-website/teams/2024/haas-logo.png.transform/2col/image.png',
+  'Haas F1 Team': 'https://media.formula1.com/content/dam/fom-website/teams/2024/haas-logo.png.transform/2col/image.png',
+  // Sauber/Kick Sauber/Alfa Romeo
+  'Sauber': 'https://media.formula1.com/content/dam/fom-website/teams/2024/kick-sauber-logo.png.transform/2col/image.png',
+  'Kick Sauber': 'https://media.formula1.com/content/dam/fom-website/teams/2024/kick-sauber-logo.png.transform/2col/image.png',
+  'Alfa Romeo': 'https://media.formula1.com/content/dam/fom-website/teams/2024/kick-sauber-logo.png.transform/2col/image.png',
+  // RB/AlphaTauri/Visa Cash App RB
+  'RB': 'https://media.formula1.com/content/dam/fom-website/teams/2024/rb-logo.png.transform/2col/image.png',
+  'AlphaTauri': 'https://media.formula1.com/content/dam/fom-website/teams/2024/rb-logo.png.transform/2col/image.png',
+  'Visa Cash App RB': 'https://media.formula1.com/content/dam/fom-website/teams/2024/rb-logo.png.transform/2col/image.png',
+  'Scuderia AlphaTauri': 'https://media.formula1.com/content/dam/fom-website/teams/2024/rb-logo.png.transform/2col/image.png',
 };
+
+// Flexible team name matching function
+const getTeamLogo = (teamName) => {
+  if (!teamName) return null;
+  const normalizedName = teamName.toLowerCase();
+
+  // Direct key match first
+  for (const [key, url] of Object.entries(TEAM_LOGOS)) {
+    if (key.toLowerCase() === normalizedName) {
+      return url;
+    }
+  }
+
+  // Partial match (check if team name includes any key)
+  for (const [key, url] of Object.entries(TEAM_LOGOS)) {
+    if (normalizedName.includes(key.toLowerCase())) {
+      return url;
+    }
+  }
+
+  // Reverse partial match (check if any key includes team name)
+  for (const [key, url] of Object.entries(TEAM_LOGOS)) {
+    if (key.toLowerCase().includes(normalizedName)) {
+      return url;
+    }
+  }
+
+  return null;
+};
+
 
 const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, selectedDriver, comparisonDriver }) => {
   return (
@@ -44,7 +89,7 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
             const info = driversInfo[driver.Driver] || {};
             const teamColor = info.TeamColor || '#FFFFFF';
             const teamName = info.TeamName || '';
-            const teamLogo = TEAM_LOGOS[Object.keys(TEAM_LOGOS).find(k => teamName.includes(k))] || null;
+            const teamLogo = getTeamLogo(teamName);
             const tyre = driver.Compound || 'UNKNOWN';
             const tyreClass = TYRE_COLORS[tyre.toUpperCase()] || TYRE_COLORS['UNKNOWN'];
             const isRetired = driver.Status === 'RET';

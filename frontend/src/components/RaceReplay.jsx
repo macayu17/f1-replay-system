@@ -73,11 +73,11 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 console.log('Total Laps:', res.data.total_laps);
                 console.log('Sample Laps Data (first 5):', res.data.laps?.slice(0, 5));
                 console.log('Sample Telemetry (first 3 points):', data.slice(0, 3));
-                
+
                 // Find when actual racing starts (Lap 2 begins)
                 const lap2Start = res.data.laps?.find(l => l.LapNumber === 2)?.LapStartTime;
                 console.log('Lap 2 Start Time:', lap2Start);
-                
+
                 console.log('Time Range:', {
                     min: d3.min(data, d => d.Time),
                     max: d3.max(data, d => d.Time),
@@ -85,18 +85,18 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 });
                 console.log('======================');
 
-        if (data.length > 0) {
-            const fetchedLaps = res.data.laps || [];
-            let min = d3.min(data, d => d.Time);
-            let startAt = min;
-            
-            // Start the replay at the beginning of Lap 2 (actual race start)
-            // Lap 1 is formation/parade lap
-            const lap2StartTime = fetchedLaps.find(l => l.LapNumber === 2)?.LapStartTime;
-            if (lap2StartTime && lap2StartTime > min) {
-                startAt = lap2StartTime - 5; // Start 5 seconds before Lap 2
-                console.log('Setting start time to Lap 2:', startAt);
-            }                    let max = d3.max(data, d => d.Time)
+                if (data.length > 0) {
+                    const fetchedLaps = res.data.laps || [];
+                    let min = d3.min(data, d => d.Time);
+                    let startAt = min;
+
+                    // Start the replay at the beginning of Lap 2 (actual race start)
+                    // Lap 1 is formation/parade lap
+                    const lap2StartTime = fetchedLaps.find(l => l.LapNumber === 2)?.LapStartTime;
+                    if (lap2StartTime && lap2StartTime > min) {
+                        startAt = lap2StartTime - 5; // Start 5 seconds before Lap 2
+                        console.log('Setting start time to Lap 2:', startAt);
+                    } let max = d3.max(data, d => d.Time)
 
                     // Calculate Race End Time (Winner's Finish Time)
                     const totalLaps = res.data.total_laps || 0;
@@ -396,12 +396,39 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         return times;
     }, [laps]);
 
-    // Calculate current lap from standings or time
+    // Calculate current lap based on elapsed session time
+    // This is more reliable than using standings[0].Lap which can be inconsistent
     useEffect(() => {
-        if (standings.length > 0 && standings[0]?.Lap) {
-            setCurrentLap(standings[0].Lap);
+        if (!lapStartTimes || Object.keys(lapStartTimes).length === 0) {
+            // Fallback to standings if no lap start times available
+            if (standings.length > 0 && standings[0]?.Lap) {
+                setCurrentLap(standings[0].Lap);
+            }
+            return;
         }
-    }, [standings]);
+
+        // Find the highest lap number where its start time is <= currentTime
+        let calculatedLap = 1;
+        const sortedLaps = Object.entries(lapStartTimes)
+            .map(([lap, time]) => ({ lap: parseInt(lap), time }))
+            .filter(({ lap }) => lap > 0) // Filter out invalid lap numbers
+            .sort((a, b) => a.lap - b.lap);
+
+        for (const { lap, time } of sortedLaps) {
+            if (time <= currentTime) {
+                calculatedLap = lap;
+            } else {
+                break;
+            }
+        }
+
+        // Clamp to totalLaps if available
+        if (totalLaps > 0 && calculatedLap > totalLaps) {
+            calculatedLap = totalLaps;
+        }
+
+        setCurrentLap(calculatedLap);
+    }, [currentTime, lapStartTimes, totalLaps, standings]);
 
     // Fastest lap detection
     const fastestLapInfo = useMemo(() => {
@@ -591,7 +618,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
 
     }, [telemetry, currentPositions, driversInfo]);
 
-    // Race Control Status (Flags)
+    // Race Control Status (Flags) - Improved detection
     const currentStatus = useMemo(() => {
         // Check Race Control Messages first for Red/Yellow flags and SC
         const recentMsgs = raceControl.filter(m => m.Time <= currentTime);
@@ -601,21 +628,49 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             const msg = (lastMsg.Message || '').toUpperCase();
             if (msg.includes("RED FLAG") || lastMsg.Flag === 'Red') return { type: 'RED', text: 'RED FLAG' };
             if (msg.includes("YELLOW FLAG")) return { type: 'YELLOW', text: 'YELLOW FLAG' };
-            // Check for SC messages in race control
             if (msg.includes("SAFETY CAR DEPLOYED") || msg.includes("SAFETY CAR IN THIS LAP")) return { type: 'SC', text: 'SAFETY CAR' };
             if (msg.includes("VIRTUAL SAFETY CAR") || msg.includes("VSC DEPLOYED")) return { type: 'VSC', text: 'VIRTUAL SAFETY CAR' };
         }
 
-        // Check Track Status (SC/VSC) - FastF1 uses various formats
-        const activeEvent = events.filter(e => e.Time <= currentTime).pop();
-        if (activeEvent) {
-            const status = String(activeEvent.Status).toUpperCase();
-            // Status codes: 1=Track Clear, 2=Yellow, 4=SC, 5=Red, 6=VSC, 7=SC Ending
-            if (status === '4' || status === 'SC' || status === 'SAFETYCAR') return { type: 'SC', text: 'SAFETY CAR' };
-            if (status === '6' || status === 'VSC' || status === 'VIRTUALSAFETYCAR') return { type: 'VSC', text: 'VIRTUAL SAFETY CAR' };
-            if (status === '7' || status.includes('ENDING')) return { type: 'SC', text: 'SAFETY CAR ENDING' };
-            if (status === '5' || status === 'RED') return { type: 'RED', text: 'RED FLAG' };
-            if (status === '2' || status === 'YELLOW') return { type: 'YELLOW', text: 'YELLOW FLAG' };
+        // Check Track Status with proper numeric code handling
+        if (events && events.length > 0) {
+            // Find the most recent event at or before currentTime using reverse search
+            let activeEvent = null;
+            for (let i = events.length - 1; i >= 0; i--) {
+                if (events[i].Time <= currentTime) {
+                    activeEvent = events[i];
+                    break;
+                }
+            }
+
+            if (activeEvent) {
+                // FastF1 track_status Status field - can be numeric or string
+                const status = String(activeEvent.Status || '').trim();
+
+                // Status codes from FastF1/FIA:
+                // 1 = AllClear/Green, 2 = Yellow, 4 = SCDeployed, 5 = Red, 6 = VSC, 7 = SCEnding
+                switch (status) {
+                    case '4': return { type: 'SC', text: 'SAFETY CAR' };
+                    case '6': return { type: 'VSC', text: 'VIRTUAL SAFETY CAR' };
+                    case '7': return { type: 'SC', text: 'SAFETY CAR ENDING' };
+                    case '5': return { type: 'RED', text: 'RED FLAG' };
+                    case '2': return { type: 'YELLOW', text: 'YELLOW FLAG' };
+                }
+
+                // Also check string status values
+                const statusUpper = status.toUpperCase();
+                if (statusUpper === 'SC' || statusUpper === 'SAFETYCAR') return { type: 'SC', text: 'SAFETY CAR' };
+                if (statusUpper === 'VSC' || statusUpper === 'VIRTUALSAFETYCAR') return { type: 'VSC', text: 'VIRTUAL SAFETY CAR' };
+                if (statusUpper === 'RED') return { type: 'RED', text: 'RED FLAG' };
+                if (statusUpper === 'YELLOW') return { type: 'YELLOW', text: 'YELLOW FLAG' };
+
+                // Check Message field for additional context
+                const message = String(activeEvent.Message || '').toUpperCase();
+                if (message.includes('SAFETY CAR') && !message.includes('VIRTUAL')) return { type: 'SC', text: 'SAFETY CAR' };
+                if (message.includes('VSC') || message.includes('VIRTUAL SAFETY CAR')) return { type: 'VSC', text: 'VIRTUAL SAFETY CAR' };
+                if (message.includes('RED FLAG')) return { type: 'RED', text: 'RED FLAG' };
+                if (message.includes('YELLOW FLAG')) return { type: 'YELLOW', text: 'YELLOW FLAG' };
+            }
         }
 
         return null;

@@ -178,6 +178,7 @@ def get_telemetry_replay(year: int, race_name: str):
             for i, row in session.results.iterrows():
                 driver_number = str(row['DriverNumber'])
                 drivers_info[driver_number] = {
+                    "DriverNumber": driver_number,
                     "Abbreviation": row['Abbreviation'],
                     "TeamName": row['TeamName'],
                     "TeamColor": f"#{row['TeamColor']}" if row['TeamColor'] else "#FFFFFF",
