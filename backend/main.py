@@ -187,6 +187,15 @@ def get_telemetry_replay(year: int, race_name: str):
         laps_data = []
         if hasattr(session, 'laps'):
             laps = session.laps.copy()
+
+            # Align identifiers with telemetry/drivers_info:
+            # telemetry uses driver numbers (session.drivers) and drivers_info is keyed by DriverNumber.
+            # FastF1 laps typically uses driver abbreviations in the 'Driver' column.
+            # Keep abbreviation in a separate field and use DriverNumber for 'Driver'.
+            if 'DriverNumber' in laps.columns and 'Driver' in laps.columns:
+                laps['DriverAbbreviation'] = laps['Driver']
+                laps['Driver'] = laps['DriverNumber'].astype(str)
+
             # Convert Timedeltas
             time_cols = ['LapStartTime', 'LapTime', 'Sector1Time', 'Sector2Time', 'Sector3Time', 'PitInTime', 'PitOutTime']
             for col in time_cols:
@@ -194,7 +203,7 @@ def get_telemetry_replay(year: int, race_name: str):
                     laps[col] = laps[col].dt.total_seconds()
             
             # Select columns - including sector times for analysis
-            laps_cols = ['Driver', 'LapNumber', 'Stint', 'Compound', 'TyreLife', 'LapTime', 'LapStartTime', 'PitInTime', 'PitOutTime', 'Sector1Time', 'Sector2Time', 'Sector3Time']
+            laps_cols = ['Driver', 'DriverAbbreviation', 'LapNumber', 'Stint', 'Compound', 'TyreLife', 'LapTime', 'LapStartTime', 'PitInTime', 'PitOutTime', 'Sector1Time', 'Sector2Time', 'Sector3Time']
             available_laps_cols = [c for c in laps_cols if c in laps.columns]
             laps_data = json.loads(laps[available_laps_cols].to_json(orient='records'))
 

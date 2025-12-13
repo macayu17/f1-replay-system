@@ -100,8 +100,10 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                     });
 
                     // Race start = Lap 1 start (from FastF1)
+                    // Note: telemetry often begins at/after cars have started moving (formation lap).
+                    // Use absoluteMin for the replay start so we show the earliest available data.
                     const lap1Start = startTimes[1] !== undefined ? startTimes[1] : absoluteMin;
-                    const startAt = Math.max(absoluteMin, lap1Start - 2);
+                    const startAt = absoluteMin;
                     setRaceStartTime(lap1Start);
 
                     // Race end = winner Lap N finish time (from FastF1)
@@ -114,6 +116,22 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                             const winnerLap = fetchedLaps.find(l => l.Driver === winnerKey && l.LapNumber === total);
                             if (winnerLap?.LapStartTime != null && winnerLap?.LapTime != null && winnerLap.LapTime > 0) {
                                 endAt = winnerLap.LapStartTime + winnerLap.LapTime;
+                            }
+
+                            // Fallback: if LapTime is missing on the final lap, estimate using winner's median lap time
+                            if (!endAt) {
+                                const lastStart = startTimes[total];
+                                const winnerLapTimes = fetchedLaps
+                                    .filter(l => l.Driver === winnerKey && l.LapTime != null && l.LapTime > 0)
+                                    .map(l => l.LapTime)
+                                    .sort((a, b) => a - b);
+                                if (lastStart !== undefined && winnerLapTimes.length > 0) {
+                                    const mid = Math.floor(winnerLapTimes.length / 2);
+                                    const median = winnerLapTimes.length % 2
+                                        ? winnerLapTimes[mid]
+                                        : (winnerLapTimes[mid - 1] + winnerLapTimes[mid]) / 2;
+                                    endAt = lastStart + median;
+                                }
                             }
                         }
 
@@ -128,7 +146,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
 
                     // Clamp UI range to official race window
                     const min = startAt;
-                    const max = endAt && endAt > min ? Math.min(absoluteMax, endAt) : absoluteMax;
+                    const max = endAt && endAt > min ? Math.min(absoluteMax, endAt + 5) : absoluteMax;
                     setRaceEndTime(endAt || 0);
                     setMinTime(min);
                     setMaxTime(max);
@@ -286,9 +304,9 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 return posA - posB;
             }
 
-            // 2. If Start of Race (Lap 0 or 1 and very early), respect Grid Position
-            const isStart = (a.Lap || 0) <= 1 && currentTime < 60;
-            if (isStart && (a.Distance || 0) < 500 && (b.Distance || 0) < 500) {
+            // 2. If Start of Race (formation / first seconds after green), respect Grid Position
+            const isStart = currentTime < (raceStartTime + 10);
+            if (isStart) {
                 const gridA = infoA.GridPosition || 20;
                 const gridB = infoB.GridPosition || 20;
                 return gridA - gridB;
@@ -400,10 +418,17 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         if (currentTime < finishAt) return;
         if (!currentPositions || currentPositions.length === 0) return;
 
-        setFinalStandings(currentPositions.map(p => ({ ...p })));
+        const officialSorted = currentPositions
+            .map(p => ({ ...p }))
+            .sort((a, b) => {
+                const posA = driversInfo[a.Driver]?.ClassifiedPosition ?? 99;
+                const posB = driversInfo[b.Driver]?.ClassifiedPosition ?? 99;
+                return posA - posB;
+            });
+        setFinalStandings(officialSorted);
         setIsPlaying(false);
         if (!showPodium) setShowPodium(true);
-    }, [currentTime, raceEndTime, maxTime, finalStandings, currentPositions, showPodium]);
+    }, [currentTime, raceEndTime, maxTime, finalStandings, currentPositions, showPodium, driversInfo]);
 
     // ==================== NEW FEATURES ====================
 
@@ -422,43 +447,48 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         return times;
     }, [laps]);
 
-    // Calculate current lap from FastF1 lap start times only
+    // Calculate current lap using telemetry LapNumber when available (most direct/robust);
+    // fallback to FastF1 lap start times.
     useEffect(() => {
-        // Fallback: Calculate from lap start times
-        if (!lapStartTimes || Object.keys(lapStartTimes).length === 0) {
-            return;
-        }
-
-        // Before Lap 1 start, show Lap 0
-        if (lapStartTimes[1] !== undefined && currentTime < lapStartTimes[1]) {
+        // 1) If we're before Lap 1 start, show Lap 0
+        if (lapStartTimes?.[1] !== undefined && currentTime < lapStartTimes[1]) {
             if (currentLap !== 0) setCurrentLap(0);
             return;
         }
 
-        // Find the highest lap number where its start time is <= currentTime
-        let calculatedLap = 1;
-        const sortedLaps = Object.entries(lapStartTimes)
-            .map(([lap, time]) => ({ lap: parseInt(lap), time }))
-            .filter(({ lap, time }) => lap > 0 && time !== null && time !== undefined)
-            .sort((a, b) => a.lap - b.lap);
+        // 2) Prefer telemetry LapNumber (max lap among visible cars at this time)
+        let calculatedLap = null;
+        if (standings && standings.length > 0) {
+            const maxLap = Math.max(...standings.map(p => (p?.Lap ?? 0)));
+            if (Number.isFinite(maxLap) && maxLap > 0) {
+                calculatedLap = maxLap;
+            }
+        }
 
-        for (const { lap, time } of sortedLaps) {
-            if (time <= currentTime) {
-                calculatedLap = lap;
-            } else {
-                break;
+        // 3) Fallback to lap start times
+        if (calculatedLap === null) {
+            if (!lapStartTimes || Object.keys(lapStartTimes).length === 0) return;
+
+            calculatedLap = 1;
+            const sortedLaps = Object.entries(lapStartTimes)
+                .map(([lap, time]) => ({ lap: parseInt(lap), time }))
+                .filter(({ lap, time }) => lap > 0 && time !== null && time !== undefined)
+                .sort((a, b) => a.lap - b.lap);
+
+            for (const { lap, time } of sortedLaps) {
+                if (time <= currentTime) {
+                    calculatedLap = lap;
+                } else {
+                    break;
+                }
             }
         }
 
         // Clamp to totalLaps if available
-        if (totalLaps > 0 && calculatedLap > totalLaps) {
-            calculatedLap = totalLaps;
-        }
+        if (totalLaps > 0 && calculatedLap > totalLaps) calculatedLap = totalLaps;
 
-        if (calculatedLap !== currentLap) {
-            setCurrentLap(calculatedLap);
-        }
-    }, [currentTime, lapStartTimes, totalLaps, currentLap]);
+        if (calculatedLap !== currentLap) setCurrentLap(calculatedLap);
+    }, [currentTime, lapStartTimes, totalLaps, currentLap, standings]);
 
     // Fastest lap detection
     const fastestLapInfo = useMemo(() => {
@@ -880,7 +910,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                                         ◀
                                     </button>
                                     <select
-                                        value={currentLap}
+                                        value={Math.max(1, currentLap)}
                                         onChange={(e) => goToLap(Number(e.target.value))}
                                         className="bg-black border border-gray-600 text-white p-1 rounded font-mono text-[10px] outline-none focus:border-rbr-red w-16 text-center"
                                     >
