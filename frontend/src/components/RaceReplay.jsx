@@ -31,6 +31,8 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
     const [showPodium, setShowPodium] = useState(false) // Podium display state
     const [currentLap, setCurrentLap] = useState(1) // Current lap counter
     const [raceStartTime, setRaceStartTime] = useState(0) // Time when race actually started (Lap 1)
+    const [raceEndTime, setRaceEndTime] = useState(0) // Winner finish time (Lap N complete)
+    const [finalStandings, setFinalStandings] = useState(null) // Freeze leaderboard at official finish
 
     const svgRef = useRef()
 
@@ -46,6 +48,16 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         setCircuitInfo({})
         setWeather([])
         setTeamRadio([])
+        setStandings([])
+        setShowPodium(false)
+        setIsPlaying(false)
+        setCurrentLap(1)
+        setRaceStartTime(0)
+        setRaceEndTime(0)
+        setFinalStandings(null)
+        setMinTime(0)
+        setMaxTime(0)
+        setCurrentTime(0)
 
         const fetchData = async () => {
             try {
@@ -69,73 +81,58 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 setLaps(res.data.laps || [])
                 setTotalLaps(res.data.total_laps || 0)
 
-                // DEBUG: Log the actual data to understand the issue
-                console.log('=== DEBUG LAP DATA ===');
-                console.log('Total Laps:', res.data.total_laps);
-                console.log('Sample Laps Data (first 5):', res.data.laps?.slice(0, 5));
-                console.log('Sample Telemetry (first 3 points):', data.slice(0, 3));
-
-                // Find when actual racing starts (Lap 2 begins)
-                const lap2Start = res.data.laps?.find(l => l.LapNumber === 2)?.LapStartTime;
-                console.log('Lap 2 Start Time:', lap2Start);
-
-                console.log('Time Range:', {
-                    min: d3.min(data, d => d.Time),
-                    max: d3.max(data, d => d.Time),
-                    raceStart: lap2Start
-                });
-                console.log('======================');
-
                 if (data.length > 0) {
                     const fetchedLaps = res.data.laps || [];
-                    let min = d3.min(data, d => d.Time);
-                    let startAt = min;
+                    const drivers = res.data.drivers || {};
 
-                    // Find the start of Lap 1 (race start) - this is our reference for elapsed time
-                    const lap1StartTime = fetchedLaps.find(l => l.LapNumber === 1)?.LapStartTime;
-                    const raceStart = lap1StartTime || min;
-                    setRaceStartTime(raceStart);
-                    console.log('Race start time (Lap 1):', raceStart);
+                    const absoluteMin = d3.min(data, d => d.Time);
+                    const absoluteMax = d3.max(data, d => d.Time);
 
-                    // Start the replay at the beginning of Lap 2 (after formation/parade lap)
-                    const lap2StartTime = fetchedLaps.find(l => l.LapNumber === 2)?.LapStartTime;
-                    if (lap2StartTime && lap2StartTime > min) {
-                        startAt = lap2StartTime - 5; // Start 5 seconds before Lap 2
-                        console.log('Setting start time to Lap 2:', startAt);
-                    }
+                    // Compute official lap start times (earliest LapStartTime per LapNumber)
+                    const startTimes = {};
+                    fetchedLaps.forEach(l => {
+                        if (l?.LapNumber && l.LapStartTime !== null && l.LapStartTime !== undefined) {
+                            const n = l.LapNumber;
+                            if (startTimes[n] === undefined || l.LapStartTime < startTimes[n]) {
+                                startTimes[n] = l.LapStartTime;
+                            }
+                        }
+                    });
 
-                    let max = d3.max(data, d => d.Time);
+                    // Race start = Lap 1 start (from FastF1)
+                    const lap1Start = startTimes[1] !== undefined ? startTimes[1] : absoluteMin;
+                    const startAt = Math.max(absoluteMin, lap1Start - 2);
+                    setRaceStartTime(lap1Start);
 
-                    // Calculate Race End Time (Winner's Finish Time)
-                    const totalLapsFromData = res.data.total_laps || 0;
+                    // Race end = winner Lap N finish time (from FastF1)
+                    const total = res.data.total_laps || 0;
+                    let endAt = 0;
 
-                    if (totalLapsFromData > 0 && fetchedLaps.length > 0) {
-                        // Find laps that are the final lap
-                        const finalLaps = fetchedLaps.filter(l => l.LapNumber === totalLapsFromData);
-                        if (finalLaps.length > 0) {
-                            // Calculate finish times (StartTime + LapTime) - only for valid entries
-                            const validFinishTimes = finalLaps
-                                .filter(l => l.LapStartTime && l.LapTime && l.LapTime > 0)
-                                .map(l => l.LapStartTime + l.LapTime);
+                    if (total > 0) {
+                        const winnerKey = Object.keys(drivers).find(k => drivers[k]?.ClassifiedPosition === 1);
+                        if (winnerKey) {
+                            const winnerLap = fetchedLaps.find(l => l.Driver === winnerKey && l.LapNumber === total);
+                            if (winnerLap?.LapStartTime != null && winnerLap?.LapTime != null && winnerLap.LapTime > 0) {
+                                endAt = winnerLap.LapStartTime + winnerLap.LapTime;
+                            }
+                        }
 
-                            if (validFinishTimes.length > 0) {
-                                // The winner is the first one to finish
-                                const winnerFinishTime = Math.min(...validFinishTimes);
-                                console.log('Winner finish time:', winnerFinishTime);
-
-                                // Cap the max time to winner's finish + 60 seconds (for cooldown lap display)
-                                // This prevents the replay from running indefinitely
-                                if (winnerFinishTime > startAt && winnerFinishTime < max) {
-                                    max = winnerFinishTime + 60; // 60 seconds after winner finishes
-                                    console.log('Capping max time to:', max);
-                                }
+                        // Fallback: earliest finisher on final lap
+                        if (!endAt) {
+                            const finalLaps = fetchedLaps.filter(l => l.LapNumber === total && l.LapStartTime != null && l.LapTime != null && l.LapTime > 0);
+                            if (finalLaps.length > 0) {
+                                endAt = Math.min(...finalLaps.map(l => l.LapStartTime + l.LapTime));
                             }
                         }
                     }
 
-                    setMinTime(min)
-                    setMaxTime(max)
-                    setCurrentTime(startAt)
+                    // Clamp UI range to official race window
+                    const min = startAt;
+                    const max = endAt && endAt > min ? Math.min(absoluteMax, endAt) : absoluteMax;
+                    setRaceEndTime(endAt || 0);
+                    setMinTime(min);
+                    setMaxTime(max);
+                    setCurrentTime(min);
                 }
             } catch (err) {
                 console.error("Telemetry fetch error", err);
@@ -146,6 +143,13 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
 
         fetchData();
     }, [year, raceName, API_URL])
+
+    const clampTime = useCallback((t) => {
+        const lower = minTime ?? 0;
+        const upper = maxTime ?? 0;
+        if (!Number.isFinite(t)) return lower;
+        return Math.max(lower, Math.min(upper, t));
+    }, [minTime, maxTime]);
 
     // Group telemetry by driver for performance
     const groupedTelemetry = useMemo(() => {
@@ -273,7 +277,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             // 1. If Race Finished (past maxTime OR leader has crossed finish), 
             //    ALWAYS use Official Classification
             const leaderLap = Math.max(...positions.map(p => p.Lap || 0));
-            const raceFinished = (totalLaps > 0 && leaderLap >= totalLaps) || (currentTime >= maxTime - 5);
+            const raceFinished = (raceEndTime > 0 && currentTime >= raceEndTime) || (totalLaps > 0 && leaderLap >= totalLaps) || (currentTime >= maxTime);
 
             if (raceFinished) {
                 // Use official classification - default to 99 for non-classified
@@ -311,7 +315,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             const leaderLap = leader.Lap || 0;
             const leaderTime = leader.CumulativeTime || 0;
 
-            const isRaceOver = totalLaps > 0 && leaderLap >= totalLaps;
+            const isRaceOver = (raceEndTime > 0 && currentTime >= raceEndTime) || (totalLaps > 0 && leaderLap >= totalLaps);
 
             positions.forEach((p, i) => {
                 if (isRaceOver && driversInfo[p.Driver]?.ClassifiedPosition) {
@@ -342,12 +346,17 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         }
 
         return positions;
-    }, [groupedTelemetry, groupedLaps, currentTime, driversInfo, laps, totalLaps, maxTime]);
+    }, [groupedTelemetry, groupedLaps, currentTime, driversInfo, laps, totalLaps, maxTime, raceEndTime]);
 
     // Update standings state for Leaderboard
     useEffect(() => {
+        const finishAt = raceEndTime && raceEndTime > 0 ? raceEndTime : maxTime;
+        if (finalStandings && currentTime >= finishAt) {
+            setStandings(finalStandings);
+            return;
+        }
         setStandings(currentPositions);
-    }, [currentPositions]);
+    }, [currentPositions, finalStandings, currentTime, raceEndTime, maxTime]);
 
     // Animation Loop
     useEffect(() => {
@@ -383,6 +392,19 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         return () => cancelAnimationFrame(animationFrameId);
     }, [isPlaying, speed, maxTime, totalLaps, showPodium]);
 
+    // Freeze leaderboard once the official finish is reached
+    useEffect(() => {
+        const finishAt = raceEndTime && raceEndTime > 0 ? raceEndTime : maxTime;
+        if (!finishAt || finishAt <= 0) return;
+        if (finalStandings) return;
+        if (currentTime < finishAt) return;
+        if (!currentPositions || currentPositions.length === 0) return;
+
+        setFinalStandings(currentPositions.map(p => ({ ...p })));
+        setIsPlaying(false);
+        if (!showPodium) setShowPodium(true);
+    }, [currentTime, raceEndTime, maxTime, finalStandings, currentPositions, showPodium]);
+
     // ==================== NEW FEATURES ====================
 
     // Lap start times lookup - memoized for performance
@@ -400,28 +422,16 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         return times;
     }, [laps]);
 
-    // Calculate current lap based on elapsed session time
-    // This is more reliable than using standings[0].Lap which can be inconsistent
+    // Calculate current lap from FastF1 lap start times only
     useEffect(() => {
-        // DEBUG: Log lap start times on first load
-        if (lapStartTimes && Object.keys(lapStartTimes).length > 0) {
-            console.log('=== LAP TIMING DEBUG ===');
-            console.log('currentTime:', currentTime);
-            console.log('lapStartTimes (first 5):', Object.entries(lapStartTimes).slice(0, 5));
-        }
-
-        // Primary method: Use leader's lap from standings (most accurate)
-        if (standings.length > 0 && standings[0]?.Lap && standings[0].Lap > 0) {
-            const leaderLap = standings[0].Lap;
-            if (leaderLap !== currentLap) {
-                console.log('Setting lap from leader:', leaderLap);
-                setCurrentLap(leaderLap);
-            }
+        // Fallback: Calculate from lap start times
+        if (!lapStartTimes || Object.keys(lapStartTimes).length === 0) {
             return;
         }
 
-        // Fallback: Calculate from lap start times
-        if (!lapStartTimes || Object.keys(lapStartTimes).length === 0) {
+        // Before Lap 1 start, show Lap 0
+        if (lapStartTimes[1] !== undefined && currentTime < lapStartTimes[1]) {
+            if (currentLap !== 0) setCurrentLap(0);
             return;
         }
 
@@ -446,10 +456,9 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         }
 
         if (calculatedLap !== currentLap) {
-            console.log('Setting lap from calculation:', calculatedLap, 'currentTime:', currentTime);
             setCurrentLap(calculatedLap);
         }
-    }, [currentTime, lapStartTimes, totalLaps, standings, currentLap]);
+    }, [currentTime, lapStartTimes, totalLaps, currentLap]);
 
     // Fastest lap detection
     const fastestLapInfo = useMemo(() => {
@@ -468,16 +477,17 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
     // Check if race is finished
     const isRaceFinished = useMemo(() => {
         if (totalLaps === 0) return false;
-        return currentLap >= totalLaps && currentTime >= maxTime - 5;
-    }, [currentLap, totalLaps, currentTime, maxTime]);
+        if (raceEndTime && raceEndTime > 0) return currentTime >= raceEndTime;
+        return currentLap >= totalLaps && currentTime >= maxTime;
+    }, [currentLap, totalLaps, currentTime, maxTime, raceEndTime]);
 
     // Lap navigation functions
     const goToLap = useCallback((lapNum) => {
         const startTime = lapStartTimes[lapNum];
         if (startTime !== undefined) {
-            setCurrentTime(Math.max(minTime, startTime - 2)); // 2 seconds before lap starts
+            setCurrentTime(clampTime(startTime - 2)); // 2 seconds before lap starts
         }
-    }, [lapStartTimes, minTime]);
+    }, [lapStartTimes, clampTime]);
 
     const goToPrevLap = useCallback(() => {
         const prevLap = Math.max(1, currentLap - 1);
@@ -898,7 +908,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                                         min={minTime}
                                         max={maxTime}
                                         value={currentTime}
-                                        onChange={(e) => setCurrentTime(Number(e.target.value))}
+                                        onChange={(e) => setCurrentTime(clampTime(Number(e.target.value)))}
                                         className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-rbr-red hover:accent-white transition-all"
                                     />
                                 </div>

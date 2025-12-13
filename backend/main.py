@@ -99,18 +99,11 @@ def get_telemetry_replay(year: int, race_name: str):
                 if not isinstance(tel['Time'].dtype, pd.Timedelta):
                     tel['Time'] = pd.to_timedelta(tel['Time'])
                 
-                # Fix for missing tyre/lap data at start:
-                # Ensure we have a record at the beginning of time with the first lap's compound
-                if not laps_data.empty:
-                    first_lap = laps_data.iloc[0]
-                    # Create a row for time 0 (or slightly negative to catch everything)
-                    # We use -1 seconds to ensure it covers the very first timestamp
-                    start_row = pd.DataFrame({
-                        'Time': [pd.Timedelta(seconds=-1)], 
-                        'Compound': [first_lap['Compound']],
-                        'LapNumber': [first_lap['LapNumber']]
-                    })
-                    laps_data = pd.concat([start_row, laps_data]).sort_values('Time')
+                # NOTE:
+                # Do NOT inject a synthetic row at time=0.
+                # Doing so forces LapNumber=1 for all telemetry prior to the real Lap 1 start,
+                # which makes Lap 1 appear to last tens of minutes (formation/grid delay).
+                # We intentionally keep leading LapNumber as NaN until the first LapStartTime.
 
                 # Merge Compound and LapNumber info
                 # We use merge_asof to find the last LapStartTime <= Telemetry Time
