@@ -45,9 +45,14 @@ jobs:
 
           HF_USER="${HF_SPACE_ID%%/*}"
           HF_URL="https://huggingface.co/spaces/${HF_SPACE_ID}"
-          HF_PUSH_URL="https://${HF_USER}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_ID}"
+          # Use oauth2 token auth (more reliable than username:token)
+          HF_PUSH_URL="https://oauth2:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_ID}"
 
           echo "Pushing to: ${HF_URL}"
+
+          echo "Preflight auth check (ls-remote)…"
+          # This gives a clearer error when the token is missing permissions or the space id is wrong.
+          git ls-remote "$HF_PUSH_URL" >/dev/null
           
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
