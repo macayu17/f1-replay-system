@@ -170,6 +170,15 @@ def get_telemetry_replay(year: int, race_name: str):
         if hasattr(session, 'results'):
             for i, row in session.results.iterrows():
                 driver_number = str(row['DriverNumber'])
+
+                total_time_s = None
+                try:
+                    if 'Time' in row and pd.notna(row['Time']):
+                        # FastF1 typically stores this as a Timedelta
+                        total_time_s = pd.to_timedelta(row['Time']).total_seconds()
+                except Exception:
+                    total_time_s = None
+
                 drivers_info[driver_number] = {
                     "DriverNumber": driver_number,
                     "Abbreviation": row['Abbreviation'],
@@ -180,7 +189,8 @@ def get_telemetry_replay(year: int, race_name: str):
                     "HeadshotUrl": row.get('HeadshotUrl', ''),
                     "Status": row.get('Status', 'Finished'),
                     "GridPosition": int(row['GridPosition']) if pd.notna(row.get('GridPosition')) else 20,
-                    "ClassifiedPosition": int(row['Position']) if pd.notna(row.get('Position')) else 20
+                    "ClassifiedPosition": int(row['Position']) if pd.notna(row.get('Position')) else 20,
+                    "TotalTime": total_time_s
                 }
 
         # Extract Lap Data (Strategy & Pit Stops)

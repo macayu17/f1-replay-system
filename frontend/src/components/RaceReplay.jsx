@@ -100,21 +100,26 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                     });
 
                     // Race start = Lap 1 start (from FastF1)
-                    // Note: telemetry often begins at/after cars have started moving (formation lap).
-                    // Use absoluteMin for the replay start so we show the earliest available data.
+                    // Start the replay slightly before Lap 1 to show the grid/formation when available.
                     const lap1Start = startTimes[1] !== undefined ? startTimes[1] : absoluteMin;
-                    const startAt = absoluteMin;
+                    const startAt = Math.max(absoluteMin, lap1Start - 10);
                     setRaceStartTime(lap1Start);
 
-                    // Race end = winner Lap N finish time (from FastF1)
+                    // Race end = winner finish time.
+                    // Prefer official results total time when available (most reliable).
                     const total = res.data.total_laps || 0;
                     let endAt = 0;
 
                     if (total > 0) {
                         const winnerKey = Object.keys(drivers).find(k => drivers[k]?.ClassifiedPosition === 1);
                         if (winnerKey) {
+                            const winnerTotalTime = drivers[winnerKey]?.TotalTime;
+                            if (winnerTotalTime != null && winnerTotalTime > 0 && lap1Start != null) {
+                                endAt = lap1Start + winnerTotalTime;
+                            }
+
                             const winnerLap = fetchedLaps.find(l => l.Driver === winnerKey && l.LapNumber === total);
-                            if (winnerLap?.LapStartTime != null && winnerLap?.LapTime != null && winnerLap.LapTime > 0) {
+                            if (!endAt && winnerLap?.LapStartTime != null && winnerLap?.LapTime != null && winnerLap.LapTime > 0) {
                                 endAt = winnerLap.LapStartTime + winnerLap.LapTime;
                             }
 
@@ -146,7 +151,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
 
                     // Clamp UI range to official race window
                     const min = startAt;
-                    const max = endAt && endAt > min ? Math.min(absoluteMax, endAt + 5) : absoluteMax;
+                    const max = endAt && endAt > min ? Math.min(absoluteMax, endAt + 10) : absoluteMax;
                     setRaceEndTime(endAt || 0);
                     setMinTime(min);
                     setMaxTime(max);
