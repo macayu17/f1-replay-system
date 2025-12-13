@@ -72,6 +72,7 @@ def get_telemetry_replay(year: int, race_name: str):
         
         drivers = session.drivers
         all_drivers_data = []
+        global_t0 = None  # global minimum telemetry time in seconds (used to shift all outputs)
         
         print(f"Processing {len(drivers)} drivers for {year} {race_name}...")
 
@@ -170,6 +171,13 @@ def get_telemetry_replay(year: int, race_name: str):
                 
                 # Convert Time to total seconds for JSON
                 final_df['Time'] = final_df['Time'].dt.total_seconds()
+                # Track global t0 across all drivers
+                try:
+                    driver_min = float(final_df['Time'].min()) if not final_df.empty else None
+                    if driver_min is not None:
+                        global_t0 = driver_min if global_t0 is None else min(global_t0, driver_min)
+                except Exception:
+                    pass
                 final_df['Driver'] = driver
                 
                 # REMOVED: Filter out data after the race is officially over
@@ -196,6 +204,19 @@ def get_telemetry_replay(year: int, race_name: str):
                 continue
         
         print(f"Finished processing all drivers. Total points: {len(all_drivers_data)}")
+
+        # Normalize to a common timeline starting at zero (matches reference implementation)
+        if global_t0 is None:
+            global_t0 = 0.0
+        else:
+            global_t0 = float(global_t0)
+
+        for rec in all_drivers_data:
+            try:
+                if rec.get('Time') is not None:
+                    rec['Time'] = float(rec['Time']) - global_t0
+            except Exception:
+                pass
         
         # Extract Driver Info
         drivers_info = {}
@@ -249,6 +270,25 @@ def get_telemetry_replay(year: int, race_name: str):
             available_laps_cols = [c for c in laps_cols if c in laps.columns]
             laps_data = json.loads(laps[available_laps_cols].to_json(orient='records'))
 
+            # Shift lap times to the same zero-based timeline
+            if global_t0 and global_t0 > 0:
+                for l in laps_data:
+                    if l.get('LapStartTime') is not None:
+                        try:
+                            l['LapStartTime'] = float(l['LapStartTime']) - global_t0
+                        except Exception:
+                            pass
+                    if l.get('PitInTime') is not None:
+                        try:
+                            l['PitInTime'] = float(l['PitInTime']) - global_t0
+                        except Exception:
+                            pass
+                    if l.get('PitOutTime') is not None:
+                        try:
+                            l['PitOutTime'] = float(l['PitOutTime']) - global_t0
+                        except Exception:
+                            pass
+
         # Extract Track Status (Safety Car, etc.)
         events = []
         if hasattr(session, 'track_status') and session.track_status is not None:
@@ -256,6 +296,14 @@ def get_telemetry_replay(year: int, race_name: str):
             ts['Time'] = ts['Time'].dt.total_seconds()
             events = json.loads(ts.to_json(orient='records'))
             print(f"Track status events: {len(events)}")
+
+            if global_t0 and global_t0 > 0:
+                for ev in events:
+                    if ev.get('Time') is not None:
+                        try:
+                            ev['Time'] = float(ev['Time']) - global_t0
+                        except Exception:
+                            pass
 
         # Extract Race Control Messages
         race_control = []
@@ -273,6 +321,14 @@ def get_telemetry_replay(year: int, race_name: str):
                             pass
                 race_control = json.loads(rc.to_json(orient='records'))
                 print(f"Race control messages: {len(race_control)}")
+
+                if global_t0 and global_t0 > 0:
+                    for msg in race_control:
+                        if msg.get('Time') is not None:
+                            try:
+                                msg['Time'] = float(msg['Time']) - global_t0
+                            except Exception:
+                                pass
 
         # Extract Circuit Info
         circuit_info = {}
@@ -308,6 +364,14 @@ def get_telemetry_replay(year: int, race_name: str):
                         # For now, let's just not crash.
                         pass
             weather_data = json.loads(wd.to_json(orient='records'))
+
+            if global_t0 and global_t0 > 0:
+                for w in weather_data:
+                    if w.get('Time') is not None:
+                        try:
+                            w['Time'] = float(w['Time']) - global_t0
+                        except Exception:
+                            pass
 
         # Calculate Total Laps
         total_laps = 0
@@ -345,7 +409,8 @@ def get_telemetry_replay(year: int, race_name: str):
             "race_control": race_control,
             "circuit_info": circuit_info,
             "weather": weather_data,
-            "total_laps": total_laps
+            "total_laps": total_laps,
+            "time_base": global_t0
         }
 
     except Exception as e:
