@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
 
+  workflow_dispatch: {}
+
 jobs:
   sync-to-hub:
     runs-on: ubuntu-latest
@@ -11,20 +13,45 @@ jobs:
         with:
           fetch-depth: 0
           lfs: true
+
+      - name: Install git-lfs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git-lfs
+          git lfs install
+
       - name: Push to hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          # TODO: Update these if your Hugging Face username or Space name is different
-          HF_USERNAME: anayush1406
-          HF_SPACE_NAME: f1-replay-backend
+          # Preferred: set HF_SPACE_ID secret to "<username>/<space_name>" (e.g. "anayush1406/f1-replay-backend")
+          HF_SPACE_ID: ${{ secrets.HF_SPACE_ID }}
+          # Backwards-compatible fallback (avoid editing workflow): set these as repo secrets if you prefer
+          HF_USERNAME: ${{ secrets.HF_USERNAME }}
+          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
         run: |
           if [ -z "$HF_TOKEN" ]; then
             echo "Error: HF_TOKEN secret is not set."
             exit 1
           fi
+
+          if [ -z "$HF_SPACE_ID" ]; then
+            if [ -n "$HF_USERNAME" ] && [ -n "$HF_SPACE_NAME" ]; then
+              HF_SPACE_ID="$HF_USERNAME/$HF_SPACE_NAME"
+            else
+              echo "Error: HF_SPACE_ID secret is not set (and HF_USERNAME/HF_SPACE_NAME fallback not provided)."
+              exit 1
+            fi
+          fi
+
+          HF_USER="${HF_SPACE_ID%%/*}"
+          HF_URL="https://huggingface.co/spaces/${HF_SPACE_ID}"
+          HF_PUSH_URL="https://${HF_USER}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_ID}"
+
+          echo "Pushing to: ${HF_URL}"
           
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
           
           # Force push to overwrite any default files (like README.md) created by Hugging Face
-          git push --force https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME main
+          # Use HEAD:main to avoid branch-name edge cases.
+          git push --force "$HF_PUSH_URL" HEAD:main

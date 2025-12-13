@@ -20,10 +20,18 @@ You have two options:
 ### Option A: Connect GitHub (Recommended)
 1. In your new Space, go to **Settings**.
 2. Scroll to **Git Repository** and connect your GitHub repository (`macayu17/f1-replay-system`).
-3. **Important:** Since your backend is in a subdirectory (`backend/`), you might need to tell Hugging Face where the Dockerfile is.
-   - However, Hugging Face Spaces usually expects the Dockerfile in the root.
-   - **Action Required:** We need to create a `Dockerfile` in the root that points to the backend, OR configure the Space to look in `backend/`.
-   - *Simpler Fix:* I have updated the project structure to work better. (See below).
+3. Ensure your Space SDK is **Docker** and the repo has a root `Dockerfile` (this repo does).
+4. After connecting, go to the **Logs** tab and wait for a full rebuild.
+
+### Verify the Space is running the latest backend
+1. Open `https://<your-space>.hf.space/openapi.json` and search for:
+   - `/api/{year}/{race_name}/race/telemetry_replay`
+   - `/api/{year}/{race_name}/race/telemetry_replay_meta`
+   - `/api/build_info`
+2. Open `https://<your-space>.hf.space/api/build_info` and confirm it returns JSON with a `built_at_utc` timestamp.
+
+If `telemetry_replay_meta` is missing or returns `{"detail":"Not Found"}`, your Space is still running an older image.
+Use **Settings → Factory rebuild** (or **Restart this Space**) to force a new build.
 
 ### Option B: Direct Upload (If GitHub sync is tricky)
 1. Clone the Space repository locally (Hugging Face gives you a git command).
@@ -41,3 +49,17 @@ You have two options:
 ## Troubleshooting
 - If the Space fails to build, check the **Logs** tab in Hugging Face.
 - Ensure the `Dockerfile` is found.
+
+## GitHub → Hugging Face Sync (Action)
+This repo can auto-sync to your Space via `.github/workflows/huggingface.yml`.
+
+### Required GitHub Secrets
+In GitHub: **Settings → Secrets and variables → Actions → New repository secret**
+
+- `HF_TOKEN`: a Hugging Face access token with permission to write to the Space.
+- `HF_SPACE_ID`: your Space id in the form `<username>/<space_name>` (example: `anayush1406/f1-replay-backend`).
+
+### Verify sync worked
+After a push to `main`, check the GitHub Actions run is green, then verify on HF:
+- `https://<your-space>.hf.space/api/build_info`
+- `https://<your-space>.hf.space/openapi.json` contains `/api/{year}/{race_name}/race/telemetry_replay_meta`

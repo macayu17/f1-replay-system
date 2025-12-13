@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pandas as pd
 import json
+from pathlib import Path
 
 # Setup caching
 # Use /tmp for cloud environments (Render/Vercel), local folder for dev
@@ -38,6 +39,18 @@ app.add_middleware(
 @app.get("/")
 def read_root():
     return {"message": "Oracle Red Bull Racing - Post-Race Analytics Hub API is running"}
+
+
+@app.get("/api/build_info")
+def get_build_info():
+    """Return container build metadata (helps verify HF is running latest build)."""
+    try:
+        build_file = Path(__file__).with_name('build_info.json')
+        if build_file.exists():
+            return json.loads(build_file.read_text(encoding='utf-8'))
+        return {"built_at_utc": None, "note": "build_info.json not present"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/seasons")
 def get_seasons():
@@ -416,6 +429,121 @@ def get_telemetry_replay(year: int, race_name: str):
     except Exception as e:
         # In production, log the error
         print(f"Endpoint Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/{year}/{race_name}/race/telemetry_replay_meta")
+def get_telemetry_replay_meta(year: int, race_name: str):
+    """Lightweight debug endpoint to confirm what's in telemetry_replay without downloading huge payloads."""
+    try:
+        print(f"Loading session (meta) for {year} {race_name}...")
+        session = fastf1.get_session(year, race_name, 'R')
+
+        try:
+            session.load(telemetry=True, laps=True, weather=True, messages=True)
+        except TypeError:
+            session.load(telemetry=True, laps=True, weather=True)
+
+        drivers = list(getattr(session, 'drivers', []) or [])
+
+        # Total laps
+        total_laps = 0
+        if hasattr(session, 'total_laps'):
+            total_laps = session.total_laps
+        elif hasattr(session, 'laps') and session.laps is not None and not session.laps.empty and 'LapNumber' in session.laps.columns:
+            total_laps = int(session.laps['LapNumber'].max())
+
+        # Time ranges from full-session data if available
+        t_min = None
+        t_max = None
+        pos_dict = getattr(session, 'pos_data', None)
+        car_dict = getattr(session, 'car_data', None)
+        has_pos = isinstance(pos_dict, dict)
+        has_car = isinstance(car_dict, dict)
+
+        def _update_min_max(seconds_value: float):
+            nonlocal t_min, t_max
+            if seconds_value is None:
+                return
+            seconds_value = float(seconds_value)
+            t_min = seconds_value if t_min is None else min(t_min, seconds_value)
+            t_max = seconds_value if t_max is None else max(t_max, seconds_value)
+
+        if has_pos or has_car:
+            for d in drivers:
+                for src in (pos_dict, car_dict):
+                    if not isinstance(src, dict) or d not in src:
+                        continue
+                    df = src[d]
+                    if df is None or df.empty or 'Time' not in df.columns:
+                        continue
+                    time_col = df['Time']
+                    try:
+                        if not pd.api.types.is_timedelta64_ns_dtype(time_col):
+                            time_col = pd.to_timedelta(time_col)
+                        _update_min_max(time_col.min().total_seconds())
+                        _update_min_max(time_col.max().total_seconds())
+                    except Exception:
+                        continue
+
+        # Fallback: lap-based times
+        if t_min is None or t_max is None:
+            try:
+                if hasattr(session, 'laps') and session.laps is not None and not session.laps.empty and 'LapStartTime' in session.laps.columns:
+                    lst = session.laps['LapStartTime'].dropna()
+                    if not lst.empty:
+                        _update_min_max(pd.to_timedelta(lst.min()).total_seconds())
+                        _update_min_max(pd.to_timedelta(lst.max()).total_seconds())
+            except Exception:
+                pass
+
+        # Counts of other streams
+        laps_count = int(len(session.laps)) if hasattr(session, 'laps') and session.laps is not None else 0
+        events_count = int(len(session.track_status)) if hasattr(session, 'track_status') and session.track_status is not None else 0
+        rc_count = int(len(session.race_control_messages)) if hasattr(session, 'race_control_messages') and session.race_control_messages is not None else 0
+        weather_count = int(len(session.weather_data)) if hasattr(session, 'weather_data') and session.weather_data is not None else 0
+
+        # Shape hints (without building telemetry)
+        pos_rows = 0
+        car_rows = 0
+        if has_pos:
+            for d in drivers:
+                if d in pos_dict and pos_dict[d] is not None:
+                    pos_rows += int(len(pos_dict[d]))
+        if has_car:
+            for d in drivers:
+                if d in car_dict and car_dict[d] is not None:
+                    car_rows += int(len(car_dict[d]))
+
+        return {
+            "year": year,
+            "race_name": race_name,
+            "drivers_count": len(drivers),
+            "total_laps": total_laps,
+            "time_min_seconds": t_min,
+            "time_max_seconds": t_max,
+            "has_pos_data": has_pos,
+            "has_car_data": has_car,
+            "pos_rows_total": pos_rows,
+            "car_rows_total": car_rows,
+            "laps_rows": laps_count,
+            "events_rows": events_count,
+            "race_control_rows": rc_count,
+            "weather_rows": weather_count,
+            "expected_top_level_keys": [
+                "telemetry",
+                "drivers",
+                "laps",
+                "events",
+                "race_control",
+                "circuit_info",
+                "weather",
+                "total_laps",
+                "time_base",
+            ],
+        }
+    except Exception as e:
+        print(f"Meta endpoint error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/{year}/{race_name}/race/team_radio")

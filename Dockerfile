@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend code
 COPY backend/ .
 
+# Record build info so the running Space can be verified
+RUN python -c "import json, datetime, platform; open('build_info.json','w',encoding='utf-8').write(json.dumps({'built_at_utc': datetime.datetime.utcnow().replace(microsecond=0).isoformat()+'Z','python': platform.python_version()}, indent=2))"
+
 # Create cache directory
 RUN mkdir -p f1_cache
 
