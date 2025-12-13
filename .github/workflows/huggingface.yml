@@ -29,6 +29,8 @@ jobs:
           HF_USERNAME: ${{ secrets.HF_USERNAME }}
           HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
         run: |
+          set -euo pipefail
+
           if [ -z "$HF_TOKEN" ]; then
             echo "Error: HF_TOKEN secret is not set."
             exit 1
@@ -56,7 +58,26 @@ jobs:
           
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-          
-          # Force push to overwrite any default files (like README.md) created by Hugging Face
-          # Use HEAD:main to avoid branch-name edge cases.
-          git push --force "$HF_PUSH_URL" HEAD:main
+
+          # Hugging Face rejects files >10MB in normal git pushes.
+          # This repo contains large local data (e.g. f1_data_2025_abudhabi/telemetry.csv),
+          # so we deploy a clean snapshot containing only what the Space needs.
+          DEPLOY_DIR="$(mktemp -d)"
+          echo "Creating deploy snapshot in: ${DEPLOY_DIR}"
+
+          # Copy only the runtime-required files
+          mkdir -p "${DEPLOY_DIR}/backend"
+          cp -R backend/* "${DEPLOY_DIR}/backend/"
+          cp Dockerfile "${DEPLOY_DIR}/Dockerfile"
+          # Optional docs (safe and small)
+          [ -f README.md ] && cp README.md "${DEPLOY_DIR}/README.md" || true
+
+          cd "${DEPLOY_DIR}"
+          git init
+          git add -A
+          git commit -m "Deploy snapshot from ${GITHUB_SHA}" || true
+          git branch -M main
+          git remote add hf "${HF_PUSH_URL}"
+
+          echo "Force pushing snapshot to Hugging Face…"
+          git push --force hf main
