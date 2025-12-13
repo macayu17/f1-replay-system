@@ -80,13 +80,45 @@ def get_telemetry_replay(year: int, race_name: str):
 
         for driver in drivers:
             try:
-                driver_laps = session.laps.pick_driver(driver)
-                if driver_laps.empty:
+                # Build per-driver laps (used for LapNumber/Compound mapping)
+                if hasattr(session, 'laps') and session.laps is not None and not session.laps.empty and 'DriverNumber' in session.laps.columns:
+                    driver_laps = session.laps[session.laps['DriverNumber'].astype(str) == str(driver)]
+                else:
+                    driver_laps = session.laps.pick_driver(driver)
+
+                if driver_laps is None or driver_laps.empty:
                     continue
-                
-                # OPTIMIZATION: Use bulk get_telemetry() instead of per-lap
-                # This returns a single DataFrame for the whole session
-                tel = driver_laps.get_telemetry()
+
+                # Prefer full-session telemetry (pos_data + car_data) to avoid truncated lap telemetry
+                tel = None
+                try:
+                    pos_dict = getattr(session, 'pos_data', None)
+                    car_dict = getattr(session, 'car_data', None)
+                    if isinstance(pos_dict, dict) and isinstance(car_dict, dict) and driver in pos_dict and driver in car_dict:
+                        pos = pos_dict[driver].copy()
+                        car = car_dict[driver].copy()
+
+                        # Ensure Time is Timedelta for both
+                        for df in (pos, car):
+                            if 'Time' in df.columns and not pd.api.types.is_timedelta64_ns_dtype(df['Time']):
+                                df['Time'] = pd.to_timedelta(df['Time'])
+
+                        # Merge position (X,Y) with car channels (Speed/Distance/etc) on Time
+                        pos = pos.sort_values('Time')
+                        car = car.sort_values('Time')
+                        tel = pd.merge_asof(
+                            pos,
+                            car,
+                            on='Time',
+                            direction='nearest',
+                            tolerance=pd.Timedelta(milliseconds=250)
+                        )
+                except Exception:
+                    tel = None
+
+                # Fallback to lap-based telemetry if full-session data isn't available
+                if tel is None:
+                    tel = driver_laps.get_telemetry()
                 
                 # Create a mapping for Compound and LapNumber based on Time
                 # We need to merge 'Compound' and 'LapNumber' from laps into telemetry
