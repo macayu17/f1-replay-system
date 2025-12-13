@@ -325,12 +325,41 @@ def get_telemetry_replay(year: int, race_name: str):
             if not rc.empty:
                 rc = rc.copy()
                 if 'Time' in rc.columns:
-                    if pd.api.types.is_timedelta64_ns_dtype(rc['Time']):
-                        rc['Time'] = rc['Time'].dt.total_seconds()
+                    t = rc['Time']
+                    if pd.api.types.is_timedelta64_ns_dtype(t):
+                        rc['Time'] = t.dt.total_seconds()
+                    elif pd.api.types.is_datetime64_any_dtype(t) or (len(t) > 0 and isinstance(t.iloc[0], pd.Timestamp)):
+                        # FastF1 often provides absolute timestamps for race control messages.
+                        # Convert to seconds since session start so it aligns with telemetry/laps.
+                        start_date = None
+                        try:
+                            # session.date is typically the session start timestamp and tends to align best
+                            start_date = getattr(session, 'date', None)
+                        except Exception:
+                            start_date = None
+
+                        if start_date is None:
+                            try:
+                                info = getattr(session, 'session_info', None)
+                                if info is not None and hasattr(info, 'get'):
+                                    start_date = info.get('StartDate')
+                            except Exception:
+                                start_date = None
+
+                        try:
+                            rc_time = pd.to_datetime(rc['Time'])
+                            if start_date is not None:
+                                rc['Time'] = (rc_time - pd.to_datetime(start_date)).dt.total_seconds()
+                            else:
+                                # Fallback: epoch seconds
+                                rc['Time'] = rc_time.astype('int64') / 1e9
+                        except Exception:
+                            pass
                     else:
+                        # Last resort: try parsing into timedelta-like values
                         try:
                             rc['Time'] = pd.to_timedelta(rc['Time']).dt.total_seconds()
-                        except:
+                        except Exception:
                             pass
                 race_control = json.loads(rc.to_json(orient='records'))
                 print(f"Race control messages: {len(race_control)}")

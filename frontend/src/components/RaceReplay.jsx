@@ -39,6 +39,69 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
     // Use prop if available, otherwise fallback (though prop should always be there from App.jsx)
     const API_URL = apiUrl || import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+    const parseTimeSeconds = useCallback((value) => {
+        if (value == null) return null;
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (typeof value === 'string') {
+            const s = value.trim();
+            if (!s) return null;
+
+            // Handle common formats like "0 days 00:12:34.567" or "00:12:34.567"
+            const daysMatch = s.match(/^(\d+)\s+days?\s+(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d+))?$/i);
+            const hmsMatch = s.match(/^(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d+))?$/);
+            const msMatch = s.match(/^(\d{1,2}):(\d{2})(?:\.(\d+))?$/); // mm:ss(.ms)
+
+            const toSeconds = (days, h, m, sec, frac) => {
+                const ms = frac ? Number(`0.${frac}`) : 0;
+                return (Number(days) * 86400) + (Number(h) * 3600) + (Number(m) * 60) + Number(sec) + ms;
+            };
+
+            if (daysMatch) {
+                const [, d, h, m, sec, frac] = daysMatch;
+                return toSeconds(d, h, m, sec, frac);
+            }
+            if (hmsMatch) {
+                const [, h, m, sec, frac] = hmsMatch;
+                return toSeconds(0, h, m, sec, frac);
+            }
+            if (msMatch) {
+                const [, m, sec, frac] = msMatch;
+                return toSeconds(0, 0, m, sec, frac);
+            }
+
+            // Epoch milliseconds/seconds as string
+            const asNum = Number(s);
+            if (Number.isFinite(asNum)) {
+                // if it's clearly epoch milliseconds
+                if (asNum > 1e12) return asNum / 1000;
+                return asNum;
+            }
+        }
+        return null;
+    }, []);
+
+    const normalizeMessages = useCallback((msgs, timeBase) => {
+        const base = (typeof timeBase === 'number' && Number.isFinite(timeBase)) ? timeBase : 0;
+        return (Array.isArray(msgs) ? msgs : [])
+            .map((m) => {
+                const rawTime = m?.Time ?? m?.SessionTime ?? m?.time ?? m?.sessionTime ?? null;
+                let t = parseTimeSeconds(rawTime);
+
+                // If backend hasn't shifted but provides time_base, shift into replay timeline
+                if (t != null && base && t > base + 60 * 60 && t > 1e6) {
+                    // Likely epoch seconds; do not shift
+                } else if (t != null && base && t > base && t > 60 * 10) {
+                    // Likely session-relative but unshifted; shift to match telemetry timeline
+                    t = t - base;
+                }
+
+                const messageText = m?.Message ?? m?.Text ?? m?.message ?? m?.text ?? '';
+                return { ...m, Time: t ?? 0, Message: String(messageText ?? '') };
+            })
+            .filter((m) => Number.isFinite(m.Time))
+            .sort((a, b) => a.Time - b.Time);
+    }, [parseTimeSeconds]);
+
     useEffect(() => {
         setLoading(true)
         setTelemetry([])
@@ -63,7 +126,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             try {
                 // Fetch Team Radio first
                 const radioRes = await axios.get(`${API_URL}/api/${year}/${raceName}/race/team_radio`);
-                setTeamRadio(radioRes.data);
+                setTeamRadio(normalizeMessages(radioRes.data, 0));
             } catch (err) {
                 console.error("Radio fetch error", err);
             }
@@ -75,7 +138,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 setTelemetry(data)
                 setDriversInfo(res.data.drivers || {})
                 setEvents(res.data.events || [])
-                setRaceControl(res.data.race_control || [])
+                setRaceControl(normalizeMessages(res.data.race_control, res.data.time_base))
                 setCircuitInfo(res.data.circuit_info || {})
                 setWeather(res.data.weather || [])
                 setLaps(res.data.laps || [])
