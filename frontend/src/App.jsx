@@ -10,10 +10,6 @@ function App() {
   const [loading, setLoading] = useState(false)
   
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
-  const buildInfo = (typeof __BUILD_INFO__ !== 'undefined' && __BUILD_INFO__)
-    ? __BUILD_INFO__
-    : { sha: 'unknown', time: '' };
   
   console.log("Frontend API URL:", API_URL); // Debugging log
 
@@ -47,11 +43,7 @@ function App() {
         <div className="flex items-center gap-4">
           <div className="w-1 h-8 bg-rbr-red"></div>
           <h1 className="text-2xl font-bold tracking-tighter italic">
-            <span className="text-rbr-red">ORACLE</span> RED BULL RACING{' '}
-            <span className="text-gray-500 text-sm not-italic font-mono border border-gray-600 px-1 rounded">PRAH v1.0</span>{' '}
-            <span className="text-gray-600 text-[10px] not-italic font-mono border border-gray-700 px-1 rounded">
-              build {buildInfo.sha}{buildInfo.time ? ` • ${buildInfo.time}` : ''}
-            </span>
+            <span className="text-rbr-red">ORACLE</span> RED BULL RACING <span className="text-gray-500 text-sm not-italic font-mono border border-gray-600 px-1 rounded">PRAH v1.0</span>
           </h1>
         </div>
         
