@@ -340,8 +340,8 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             const driverLaps = groupedLaps[p.Driver] || [];
             // Compute completed laps based on lap end (LapStartTime + LapTime) so gaps update within a lap.
             const completedLaps = driverLaps.filter(l => {
-                const lapTime = parseTimeSeconds(l?.LapTime);
-                const lapStart = parseTimeSeconds(l?.LapStartTime);
+                const lapTime = l?.LapTime;
+                const lapStart = l?.LapStartTime;
                 if (!Number.isFinite(lapTime) || lapTime <= 0) return false;
                 if (!Number.isFinite(lapStart)) return false;
                 return (lapStart + lapTime) <= currentTime;
@@ -356,7 +356,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             // Current lap start time (latest LapStartTime <= currentTime)
             let currentLapStart = null;
             for (let i = driverLaps.length - 1; i >= 0; i--) {
-                const ls = parseTimeSeconds(driverLaps[i]?.LapStartTime);
+                const ls = driverLaps[i]?.LapStartTime;
                 if (Number.isFinite(ls) && ls <= currentTime) {
                     currentLapStart = ls;
                     break;
