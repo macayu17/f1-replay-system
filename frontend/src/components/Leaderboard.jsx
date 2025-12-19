@@ -111,7 +111,7 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
             const tyreClass = TYRE_COLORS[tyre.toUpperCase()] || TYRE_COLORS['UNKNOWN'];
             const isRetired = driver.Status === 'RET';
             const isFinished = driver.Status === 'FINISHED';
-            const gap = index === 0 ? 'Leader' : (isRetired ? 'OUT' : driver.GapStr);
+            const gap = index === 0 ? 'Leader' : (isRetired ? 'OUT' : (driver.GapStr ?? '-'));
             const hasFastestLap = fastestLapDriver === driver.Driver;
             const isSelected = selectedDriver === driver.Driver;
             const isComparison = comparisonDriver === driver.Driver;
