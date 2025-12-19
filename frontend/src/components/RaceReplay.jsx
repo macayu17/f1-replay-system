@@ -338,17 +338,38 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         // This is the correct way to determine positions - not by distance
         positions.forEach(p => {
             const driverLaps = groupedLaps[p.Driver] || [];
-            // Get completed laps (LapTime is not null/undefined and lap has started)
-            const completedLaps = driverLaps.filter(l =>
-                l.LapTime && l.LapTime > 0 &&
-                l.LapStartTime !== null && l.LapStartTime <= currentTime
-            );
+            // Compute completed laps based on lap end (LapStartTime + LapTime) so gaps update within a lap.
+            const completedLaps = driverLaps.filter(l => {
+                const lapTime = l?.LapTime;
+                const lapStart = l?.LapStartTime;
+                if (!Number.isFinite(lapTime) || lapTime <= 0) return false;
+                if (!Number.isFinite(lapStart)) return false;
+                return (lapStart + lapTime) <= currentTime;
+            });
 
-            // Sum up lap times for cumulative race time
+            // Sum up completed lap times
             let cumulativeTime = 0;
-            completedLaps.forEach(l => { cumulativeTime += l.LapTime; });
+            for (const l of completedLaps) cumulativeTime += l.LapTime;
             p.CumulativeTime = cumulativeTime;
             p.CompletedLaps = completedLaps.length;
+
+            // Current lap start time (latest LapStartTime <= currentTime)
+            let currentLapStart = null;
+            for (let i = driverLaps.length - 1; i >= 0; i--) {
+                const ls = driverLaps[i]?.LapStartTime;
+                if (Number.isFinite(ls) && ls <= currentTime) {
+                    currentLapStart = ls;
+                    break;
+                }
+            }
+
+            // Estimated race time for live gaps: completed laps + progress into current lap
+            // This matches how live timing gaps behave (updates continuously).
+            if (Number.isFinite(currentLapStart)) {
+                p.EstimatedRaceTime = cumulativeTime + Math.max(0, currentTime - currentLapStart);
+            } else {
+                p.EstimatedRaceTime = cumulativeTime;
+            }
         });
 
         // Sort Logic
@@ -387,8 +408,8 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
 
             // Same lap: who finished it first (lower cumulative time = ahead)
             // If cumulative times are available
-            if (a.CumulativeTime && b.CumulativeTime) {
-                return a.CumulativeTime - b.CumulativeTime;
+            if (Number.isFinite(a.EstimatedRaceTime) && Number.isFinite(b.EstimatedRaceTime)) {
+                return a.EstimatedRaceTime - b.EstimatedRaceTime;
             }
 
             // Fallback: use distance (for when cumulative time not yet available)
@@ -399,7 +420,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         if (positions.length > 0) {
             const leader = positions.find(p => p.Status === "RUNNING" || p.Status === "FINISHED") || positions[0];
             const leaderLap = leader.Lap || 0;
-            const leaderTime = leader.CumulativeTime || 0;
+            const leaderTime = Number.isFinite(leader.EstimatedRaceTime) ? leader.EstimatedRaceTime : (leader.CumulativeTime || 0);
 
             const isRaceOver = (raceEndTime > 0 && currentTime >= raceEndTime) || (totalLaps > 0 && leaderLap >= totalLaps);
 
@@ -416,9 +437,9 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                     const lapDiff = leaderLap - (p.Lap || 0);
                     if (lapDiff > 0) {
                         p.GapStr = `+${lapDiff} Lap${lapDiff > 1 ? 's' : ''}`;
-                    } else if (leaderTime && p.CumulativeTime) {
-                        // Calculate time gap
-                        const timeGap = p.CumulativeTime - leaderTime;
+                    } else if (Number.isFinite(leaderTime) && Number.isFinite(p.EstimatedRaceTime)) {
+                        // Live time gap (updates continuously)
+                        const timeGap = Math.max(0, p.EstimatedRaceTime - leaderTime);
                         p.GapStr = `+${timeGap.toFixed(3)}s`;
                     } else {
                         // Fallback to distance-based estimation
@@ -648,6 +669,22 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         }
     }, [selectedDriver]);
 
+    const getDriverCode = useCallback((info, fallback) => {
+        const rawAbbr = String(info?.Abbreviation ?? '').trim().toUpperCase();
+        if (rawAbbr.length === 3) return rawAbbr;
+        if (rawAbbr.length > 3) return rawAbbr.slice(0, 3);
+
+        const last = String(info?.LastName ?? '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+        if (last.length >= 3) return last.slice(0, 3);
+
+        const first = String(info?.FirstName ?? '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+        const combined = (first.slice(0, 1) + last.slice(0, 2)).replace(/[^A-Z]/g, '');
+        if (combined.length === 3) return combined;
+
+        const fb = String(fallback ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        return fb ? fb.slice(0, 3) : '---';
+    }, []);
+
     // ==================== END NEW FEATURES ====================
 
     useEffect(() => {
@@ -746,7 +783,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             .attr("y", 4)
             .text(d => {
                 const info = driversInfo[d.Driver];
-                return info ? info.Abbreviation : d.Driver;
+                return getDriverCode(info, d.Driver);
             })
             .attr("fill", "white")
             .attr("font-size", "10px")
@@ -754,7 +791,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             .attr("font-weight", "bold")
             .style("text-shadow", "0px 0px 4px black");
 
-    }, [telemetry, currentPositions, driversInfo]);
+    }, [telemetry, currentPositions, driversInfo, getDriverCode]);
 
     // Race Control Status (Flags) - Improved detection
     const currentStatus = useMemo(() => {

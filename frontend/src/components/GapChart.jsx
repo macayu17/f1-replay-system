@@ -1,6 +1,22 @@
 import React, { useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
+const getDriverCode = (info, fallback) => {
+    const rawAbbr = String(info?.Abbreviation ?? '').trim().toUpperCase();
+    if (rawAbbr.length === 3) return rawAbbr;
+    if (rawAbbr.length > 3) return rawAbbr.slice(0, 3);
+
+    const last = String(info?.LastName ?? '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+    if (last.length >= 3) return last.slice(0, 3);
+
+    const first = String(info?.FirstName ?? '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+    const combined = (first.slice(0, 1) + last.slice(0, 2)).replace(/[^A-Z]/g, '');
+    if (combined.length === 3) return combined;
+
+    const fb = String(fallback ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return fb ? fb.slice(0, 3) : '---';
+};
+
 const GapChart = ({ laps, driversInfo, standings, currentTime, totalLaps }) => {
     // Calculate gap to leader for each driver at each lap
     const gapData = useMemo(() => {
@@ -95,7 +111,7 @@ const GapChart = ({ laps, driversInfo, standings, currentTime, totalLaps }) => {
                         />
                         <Tooltip
                             contentStyle={{ backgroundColor: '#111', border: '1px solid #333', fontSize: 10 }}
-                            formatter={(value, name) => [`+${value.toFixed(3)}s`, driversInfo[name]?.Abbreviation || name]}
+                            formatter={(value, name) => [`+${value.toFixed(3)}s`, getDriverCode(driversInfo[name] || {}, name)]}
                             labelFormatter={(lap) => `Lap ${lap}`}
                         />
                         {displayDrivers.map(driver => (
@@ -119,7 +135,7 @@ const GapChart = ({ laps, driversInfo, standings, currentTime, totalLaps }) => {
                 {displayDrivers.slice(0, 5).map(driver => (
                     <div key={driver} className="flex items-center gap-1">
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getDriverColor(driver) }}></div>
-                        <span className="text-gray-400">{driversInfo[driver]?.Abbreviation || driver}</span>
+                        <span className="text-gray-400">{getDriverCode(driversInfo[driver] || {}, driver)}</span>
                     </div>
                 ))}
             </div>

@@ -75,6 +75,23 @@ const getTeamLogo = (teamName) => {
 };
 
 
+const getDriverCode = (info, fallback) => {
+  const rawAbbr = String(info?.Abbreviation ?? '').trim().toUpperCase();
+  if (rawAbbr.length === 3) return rawAbbr;
+  if (rawAbbr.length > 3) return rawAbbr.slice(0, 3);
+
+  const last = String(info?.LastName ?? '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+  if (last.length >= 3) return last.slice(0, 3);
+
+  const first = String(info?.FirstName ?? '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+  const combined = (first.slice(0, 1) + last.slice(0, 2)).replace(/[^A-Z]/g, '');
+  if (combined.length === 3) return combined;
+
+  const fb = String(fallback ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return fb ? fb.slice(0, 3) : '---';
+};
+
+
 const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, selectedDriver, comparisonDriver }) => {
   return (
     <div className="bg-black/90 backdrop-blur-md rounded-lg border border-gray-700 w-full overflow-hidden font-mono text-sm shadow-2xl flex flex-col h-full">
@@ -98,6 +115,7 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
             const hasFastestLap = fastestLapDriver === driver.Driver;
             const isSelected = selectedDriver === driver.Driver;
             const isComparison = comparisonDriver === driver.Driver;
+            const code = getDriverCode(info, driver.Driver);
 
             let rowClass = `flex items-center h-10 border-b border-gray-800 hover:bg-gray-800 cursor-pointer transition-all group relative overflow-hidden ${isRetired ? 'opacity-50 grayscale' : ''}`;
 
@@ -163,7 +181,7 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
                         }}
                       />
                     )}
-                    <span>{info.Abbreviation || driver.Driver}</span>
+                    <span>{code}</span>
                   </span>
                   <span className="text-[9px] text-gray-500 uppercase font-normal">{info.LastName}</span>
                 </div>
@@ -171,7 +189,7 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
                 {/* Gap & Fastest Lap Badge */}
                 <div className={`w-24 text-right text-xs mr-3 font-mono flex items-center justify-end gap-1 ${isRetired ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
                   {hasFastestLap && <span className="bg-purple-600 text-white text-[8px] px-1 rounded font-bold animate-pulse">FL</span>}
-                  <span>{gap}</span>
+                  <span className="bg-gray-800/60 px-1.5 py-0.5 rounded border border-gray-700/60">{gap}</span>
                 </div>
 
                 {/* Tyre */}

@@ -1,5 +1,21 @@
 import React, { useMemo } from 'react';
 
+const getDriverCode = (info, fallback) => {
+    const rawAbbr = String(info?.Abbreviation ?? '').trim().toUpperCase();
+    if (rawAbbr.length === 3) return rawAbbr;
+    if (rawAbbr.length > 3) return rawAbbr.slice(0, 3);
+
+    const last = String(info?.LastName ?? '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+    if (last.length >= 3) return last.slice(0, 3);
+
+    const first = String(info?.FirstName ?? '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+    const combined = (first.slice(0, 1) + last.slice(0, 2)).replace(/[^A-Z]/g, '');
+    if (combined.length === 3) return combined;
+
+    const fb = String(fallback ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return fb ? fb.slice(0, 3) : '---';
+};
+
 const SectorTimes = ({ laps, driversInfo, standings, currentTime }) => {
     // Get the most recent sector times for each driver
     const sectorData = useMemo(() => {
@@ -84,7 +100,7 @@ const SectorTimes = ({ laps, driversInfo, standings, currentTime }) => {
                                 <td className="px-1 py-0.5 text-gray-400">{i + 1}</td>
                                 <td className="px-1 py-0.5 font-bold text-white flex items-center gap-1">
                                     <div className="w-0.5 h-3" style={{ backgroundColor: info.TeamColor }}></div>
-                                    {info.Abbreviation || d.driver}
+                                    {getDriverCode(info, d.driver)}
                                 </td>
                                 <td className={`px-1 py-0.5 text-right ${getSectorClass(d.s1, sectorData.bestS1)}`}>
                                     {formatTime(d.s1)}
