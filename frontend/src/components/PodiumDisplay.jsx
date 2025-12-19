@@ -1,27 +1,9 @@
 import React from 'react';
 
-const getDriverCode = (info, fallback) => {
-    const rawAbbr = String(info?.Abbreviation ?? '').trim().toUpperCase();
-    if (rawAbbr.length === 3) return rawAbbr;
-    if (rawAbbr.length > 3) return rawAbbr.slice(0, 3);
-
-    const last = String(info?.LastName ?? '').trim().toUpperCase().replace(/[^A-Z]/g, '');
-    if (last.length >= 3) return last.slice(0, 3);
-
-    const first = String(info?.FirstName ?? '').trim().toUpperCase().replace(/[^A-Z]/g, '');
-    const combined = (first.slice(0, 1) + last.slice(0, 2)).replace(/[^A-Z]/g, '');
-    if (combined.length === 3) return combined;
-
-    const fb = String(fallback ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    return fb ? fb.slice(0, 3) : '---';
-};
-
 const PodiumDisplay = ({ standings, driversInfo, isRaceFinished, onClose }) => {
     if (!isRaceFinished || standings.length < 3) return null;
 
     const podium = standings.slice(0, 3);
-
-    const code = (driver) => getDriverCode(driversInfo[driver] || {}, driver);
 
     const formatGap = (gap) => {
         if (!gap || gap === 'Leader') return '';
@@ -60,14 +42,14 @@ const PodiumDisplay = ({ standings, driversInfo, isRaceFinished, onClose }) => {
                                 />
                             ) : (
                                 <div className="w-20 h-20 rounded-full border-4 border-gray-400 bg-gray-800 flex items-center justify-center text-2xl font-bold text-white">
-                                    {code(podium[1]?.Driver) || 'P2'}
+                                    {driversInfo[podium[1]?.Driver]?.Abbreviation || '2'}
                                 </div>
                             )}
                             <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-gray-400 flex items-center justify-center text-black font-black text-lg">
                                 2
                             </div>
                         </div>
-                        <div className="text-lg font-bold text-white">{code(podium[1]?.Driver)}</div>
+                        <div className="text-lg font-bold text-white">{driversInfo[podium[1]?.Driver]?.Abbreviation}</div>
                         <div className="text-xs text-gray-400">{driversInfo[podium[1]?.Driver]?.TeamName}</div>
                         <div className="text-xs text-gray-500 mt-1">{formatGap(podium[1]?.GapStr)}</div>
                         <div className="w-24 h-24 bg-gradient-to-t from-gray-500 to-gray-400 rounded-t-lg mt-4"></div>
@@ -84,7 +66,7 @@ const PodiumDisplay = ({ standings, driversInfo, isRaceFinished, onClose }) => {
                                 />
                             ) : (
                                 <div className="w-24 h-24 rounded-full border-4 border-yellow-400 bg-gray-800 flex items-center justify-center text-3xl font-bold text-white shadow-[0_0_30px_rgba(251,191,36,0.5)]">
-                                    {code(podium[0]?.Driver) || 'P1'}
+                                    {driversInfo[podium[0]?.Driver]?.Abbreviation || '1'}
                                 </div>
                             )}
                             <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center text-black font-black text-xl">
@@ -110,14 +92,14 @@ const PodiumDisplay = ({ standings, driversInfo, isRaceFinished, onClose }) => {
                                 />
                             ) : (
                                 <div className="w-20 h-20 rounded-full border-4 border-orange-700 bg-gray-800 flex items-center justify-center text-2xl font-bold text-white">
-                                    {code(podium[2]?.Driver) || 'P3'}
+                                    {driversInfo[podium[2]?.Driver]?.Abbreviation || '3'}
                                 </div>
                             )}
                             <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-orange-700 flex items-center justify-center text-white font-black text-lg">
                                 3
                             </div>
                         </div>
-                        <div className="text-lg font-bold text-white">{code(podium[2]?.Driver)}</div>
+                        <div className="text-lg font-bold text-white">{driversInfo[podium[2]?.Driver]?.Abbreviation}</div>
                         <div className="text-xs text-gray-400">{driversInfo[podium[2]?.Driver]?.TeamName}</div>
                         <div className="text-xs text-gray-500 mt-1">{formatGap(podium[2]?.GapStr)}</div>
                         <div className="w-24 h-20 bg-gradient-to-t from-orange-800 to-orange-700 rounded-t-lg mt-4"></div>
