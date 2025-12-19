@@ -149,22 +149,7 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
 
                 {/* Driver Name */}
                 <div className="flex-1 font-bold text-white truncate flex flex-col justify-center leading-tight">
-                  <span className="text-sm tracking-wide flex items-center gap-2">
-                    {teamLogo && (
-                      <img
-                        src={teamLogo}
-                        alt={teamName || 'Team'}
-                        className="h-4 w-4 object-contain"
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          // Hide broken images without re-rendering
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
-                    )}
-                    <span>{info.Abbreviation || driver.Driver}</span>
-                  </span>
+                  <span className="text-sm tracking-wide">{info.Abbreviation || driver.Driver}</span>
                   <span className="text-[9px] text-gray-500 uppercase font-normal">{info.LastName}</span>
                 </div>
 
