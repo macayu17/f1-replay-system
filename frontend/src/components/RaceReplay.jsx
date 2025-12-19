@@ -39,10 +39,6 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
     // Use prop if available, otherwise fallback (though prop should always be there from App.jsx)
     const API_URL = apiUrl || import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-    const buildInfo = (typeof __BUILD_INFO__ !== 'undefined' && __BUILD_INFO__)
-        ? __BUILD_INFO__
-        : { sha: 'unknown', time: '' };
-
     const parseTimeSeconds = useCallback((value) => {
         if (value == null) return null;
         if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -905,9 +901,8 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                                 <span className="text-rbr-red">Grid</span>Pulse <span className="text-gray-500 text-sm not-italic font-normal">| Post-Race Analytics</span>
                             </h1>
                         </div>
-                        <div className="text-right">
-                            <div className="text-xs font-mono text-gray-500">{year} {raceName}</div>
-                            <div className="text-[10px] font-mono text-gray-600">build {buildInfo.sha}{buildInfo.time ? ` • ${buildInfo.time}` : ''}</div>
+                        <div className="text-xs font-mono text-gray-500">
+                            {year} {raceName}
                         </div>
                     </div>
 
