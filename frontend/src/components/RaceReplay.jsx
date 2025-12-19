@@ -558,19 +558,28 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         if (calculatedLap !== currentLap) setCurrentLap(calculatedLap);
     }, [currentTime, lapStartTimes, totalLaps, currentLap, standings]);
 
-    // Fastest lap detection
+    // Fastest lap detection (updates as the replay progresses)
     const fastestLapInfo = useMemo(() => {
         if (!laps || laps.length === 0) return null;
+        if (!Number.isFinite(currentTime)) return null;
+
         let fastest = null;
-        laps.forEach(lap => {
-            if (lap.LapTime && lap.LapTime > 0) {
-                if (!fastest || lap.LapTime < fastest.time) {
-                    fastest = { driver: lap.Driver, time: lap.LapTime, lap: lap.LapNumber };
-                }
+        for (const lap of laps) {
+            const lapTime = lap?.LapTime;
+            const lapStart = lap?.LapStartTime;
+            if (!Number.isFinite(lapTime) || lapTime <= 0) continue;
+            if (!Number.isFinite(lapStart)) continue;
+
+            // Only count laps that are completed by currentTime
+            const lapEnd = lapStart + lapTime;
+            if (lapEnd > currentTime) continue;
+
+            if (!fastest || lapTime < fastest.time) {
+                fastest = { driver: lap.Driver, time: lapTime, lap: lap.LapNumber };
             }
-        });
+        }
         return fastest;
-    }, [laps]);
+    }, [laps, currentTime]);
 
     // Check if race is finished
     const isRaceFinished = useMemo(() => {
