@@ -269,6 +269,27 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         return groups;
     }, [laps]);
 
+    // Fallback lap start times derived from telemetry (per driver, per lap)
+    // This keeps live gaps updating even when LapStartTime/LapTime are missing in lap data.
+    const telemetryLapStarts = useMemo(() => {
+        const out = {};
+        for (const [driver, data] of Object.entries(groupedTelemetry || {})) {
+            let lastLap = null;
+            for (const pt of data) {
+                const lapRaw = pt?.LapNumber ?? pt?.Lap;
+                const lapNum = Number(lapRaw);
+                if (!Number.isFinite(lapNum)) continue;
+                const lap = Math.max(1, Math.floor(lapNum));
+                if (lap !== lastLap) {
+                    if (!out[driver]) out[driver] = {};
+                    if (!Number.isFinite(out[driver][lap])) out[driver][lap] = pt.Time;
+                    lastLap = lap;
+                }
+            }
+        }
+        return out;
+    }, [groupedTelemetry]);
+
     // Calculate Standings & Current Positions
     const currentPositions = useMemo(() => {
         if (!groupedTelemetry || Object.keys(groupedTelemetry).length === 0) return [];
@@ -357,6 +378,29 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             p.CumulativeTime = cumulativeTime;
             p.CompletedLaps = completedLaps.length;
 
+            // If lap timing data is missing/unusable, fall back to telemetry-derived lap durations.
+            // This prevents gaps getting stuck at +0.000s for everyone early in the race.
+            if (!completedLaps.length && driverLaps.length) {
+                const startsMap = telemetryLapStarts?.[p.Driver] || {};
+                const startEntries = Object.entries(startsMap)
+                    .map(([lap, t]) => ({ lap: Number(lap), t: Number(t) }))
+                    .filter(x => Number.isFinite(x.lap) && Number.isFinite(x.t))
+                    .sort((a, b) => a.lap - b.lap);
+
+                let teleCum = 0;
+                for (let i = 0; i < startEntries.length - 1; i++) {
+                    const a = startEntries[i];
+                    const b = startEntries[i + 1];
+                    if (b.t <= currentTime && b.t > a.t) {
+                        teleCum += (b.t - a.t);
+                    }
+                }
+                if (teleCum > 0) {
+                    cumulativeTime = teleCum;
+                    p.CumulativeTime = cumulativeTime;
+                }
+            }
+
             // Current lap start time (latest LapStartTime <= currentTime)
             let currentLapStart = null;
             for (let i = driverLaps.length - 1; i >= 0; i--) {
@@ -364,6 +408,15 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 if (Number.isFinite(ls) && ls <= currentTime) {
                     currentLapStart = ls;
                     break;
+                }
+            }
+
+            // Telemetry fallback for current lap start
+            if (!Number.isFinite(currentLapStart)) {
+                const lap = Number(p.Lap || 1);
+                const tLs = telemetryLapStarts?.[p.Driver]?.[lap];
+                if (Number.isFinite(tLs) && tLs <= currentTime) {
+                    currentLapStart = tLs;
                 }
             }
 
@@ -457,7 +510,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         }
 
         return positions;
-    }, [groupedTelemetry, groupedLaps, currentTime, driversInfo, laps, totalLaps, maxTime, raceEndTime]);
+    }, [groupedTelemetry, groupedLaps, telemetryLapStarts, currentTime, driversInfo, laps, totalLaps, maxTime, raceEndTime, parseTimeSeconds]);
 
     // Update standings state for Leaderboard
     useEffect(() => {
