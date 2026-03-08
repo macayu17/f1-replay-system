@@ -228,7 +228,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         };
 
         fetchData();
-    }, [year, raceName, API_URL])
+    }, [year, raceName, API_URL, normalizeMessages])
 
     const clampTime = useCallback((t) => {
         const lower = minTime ?? 0;
@@ -403,7 +403,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
 
             const isRaceOver = (raceEndTime > 0 && currentTime >= raceEndTime) || (totalLaps > 0 && leaderLap >= totalLaps);
 
-            positions.forEach((p, i) => {
+            positions.forEach((p) => {
                 if (isRaceOver && driversInfo[p.Driver]?.ClassifiedPosition) {
                     p.Status = "FINISHED";
                 }
@@ -432,7 +432,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         }
 
         return positions;
-    }, [groupedTelemetry, groupedLaps, currentTime, driversInfo, laps, totalLaps, maxTime, raceEndTime]);
+    }, [groupedTelemetry, groupedLaps, currentTime, driversInfo, totalLaps, maxTime, raceEndTime, raceStartTime]);
 
     // Update standings state for Leaderboard
     useEffect(() => {
@@ -571,13 +571,6 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         });
         return fastest;
     }, [laps]);
-
-    // Check if race is finished
-    const isRaceFinished = useMemo(() => {
-        if (totalLaps === 0) return false;
-        if (raceEndTime && raceEndTime > 0) return currentTime >= raceEndTime;
-        return currentLap >= totalLaps && currentTime >= maxTime;
-    }, [currentLap, totalLaps, currentTime, maxTime, raceEndTime]);
 
     // Lap navigation functions
     const goToLap = useCallback((lapNum) => {
@@ -745,7 +738,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             .attr("font-weight", "bold")
             .style("text-shadow", "0px 0px 4px black");
 
-    }, [telemetry, currentPositions, driversInfo]);
+    }, [telemetry, currentPositions, driversInfo, groupedTelemetry]);
 
     // Race Control Status (Flags) - Improved detection
     const currentStatus = useMemo(() => {

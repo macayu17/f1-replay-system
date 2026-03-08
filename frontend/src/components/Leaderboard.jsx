@@ -147,6 +147,14 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
                   {info.DriverNumber || driver.Driver}
                 </div>
 
+                {teamLogo && (
+                  <img
+                    src={teamLogo}
+                    alt={teamName}
+                    className="w-4 h-4 object-contain mr-2 opacity-80"
+                  />
+                )}
+
                 {/* Driver Name */}
                 <div className="flex-1 font-bold text-white truncate flex flex-col justify-center leading-tight">
                   <span className="text-sm tracking-wide">{info.Abbreviation || driver.Driver}</span>

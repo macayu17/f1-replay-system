@@ -17,33 +17,31 @@ function App() {
     axios.get(`${API_URL}/api/seasons`)
       .then(res => setSeasons(res.data.seasons))
       .catch(err => console.error(err))
-  }, [])
+  }, [API_URL])
 
   useEffect(() => {
-    if (selectedSeason) {
-      setLoading(true)
-      axios.get(`${API_URL}/api/${selectedSeason}/races`)
-        .then(res => {
-          // Ensure we have an array
-          const raceData = Array.isArray(res.data) ? res.data : [];
-          setRaces(raceData)
-          setLoading(false)
-        })
-        .catch(err => {
-          console.error(err)
-          setLoading(false)
-        })
-    }
-  }, [selectedSeason])
+    if (!selectedSeason) return
+
+    axios.get(`${API_URL}/api/${selectedSeason}/races`)
+      .then(res => {
+        const raceData = Array.isArray(res.data) ? res.data : [];
+        setRaces(raceData)
+        setLoading(false)
+      })
+      .catch(err => {
+        console.error(err)
+        setLoading(false)
+      })
+  }, [selectedSeason, API_URL])
 
   return (
     <div className="min-h-screen bg-rbr-black text-white font-sans flex flex-col">
-      {/* Top Navigation Bar */}
-      <header className="bg-rbr-charcoal border-b border-gray-800 p-4 flex justify-between items-center shadow-lg z-10">
+      <header className="bg-[#0f1115]/95 border-b border-white/10 p-4 flex justify-between items-center z-10 backdrop-blur">
         <div className="flex items-center gap-4">
-          <div className="w-1 h-8 bg-rbr-red"></div>
-          <h1 className="text-2xl font-bold tracking-tighter italic">
-            <span className="text-rbr-red">ORACLE</span> RED BULL RACING <span className="text-gray-500 text-sm not-italic font-mono border border-gray-600 px-1 rounded">PRAH v1.0</span>
+          <div className="w-1 h-8 bg-rbr-red rounded-full"></div>
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight">
+            PRAH <span className="text-rbr-red">·</span> F1 Replay
+            <span className="text-gray-400 text-xs font-mono border border-white/15 px-2 py-0.5 rounded-full ml-2 align-middle">revamp</span>
           </h1>
         </div>
         
@@ -52,7 +50,17 @@ function App() {
             <label className="text-[10px] text-gray-400 uppercase tracking-widest font-mono">Season</label>
             <select 
               className="bg-black border border-gray-700 p-1 rounded text-white font-mono text-sm focus:border-rbr-red outline-none"
-              onChange={(e) => setSelectedSeason(e.target.value)}
+              onChange={(e) => {
+                const nextSeason = e.target.value
+                setSelectedRace(null)
+                if (!nextSeason) {
+                  setRaces([])
+                  setLoading(false)
+                } else {
+                  setLoading(true)
+                }
+                setSelectedSeason(nextSeason)
+              }}
               value={selectedSeason || ''}
             >
               <option value="">SELECT</option>
@@ -66,8 +74,9 @@ function App() {
               className="bg-black border border-gray-700 p-1 rounded text-white font-mono text-sm focus:border-rbr-red outline-none min-w-[200px]"
               onChange={(e) => {
                   const race = races.find(r => r.EventName === e.target.value);
-                  setSelectedRace(race);
+                  setSelectedRace(race || null);
               }}
+              value={selectedRace?.EventName || ''}
               disabled={!selectedSeason}
             >
               <option value="">SELECT EVENT</option>
@@ -77,11 +86,7 @@ function App() {
         </div>
       </header>
 
-      <main className="flex-grow p-6 relative overflow-hidden">
-        {/* Background decorative elements */}
-        <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-10" 
-             style={{backgroundImage: 'linear-gradient(0deg, transparent 24%, #222 25%, #222 26%, transparent 27%, transparent 74%, #222 75%, #222 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, #222 25%, #222 26%, transparent 27%, transparent 74%, #222 75%, #222 76%, transparent 77%, transparent)', backgroundSize: '50px 50px'}}>
-        </div>
+      <main className="flex-grow p-4 md:p-6 relative overflow-hidden">
 
         {loading && (
           <div className="absolute top-20 right-6 flex items-center gap-2 text-rbr-yellow font-mono text-xs animate-pulse">

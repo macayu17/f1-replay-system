@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import fastf1
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -54,9 +55,9 @@ def get_build_info():
 
 @app.get("/api/seasons")
 def get_seasons():
-    # FastF1 doesn't have a direct "list all seasons" lightweight call, 
-    # but we can return a list of recent years for the UI.
-    return {"seasons": list(range(2018, 2026))}
+    # Keep seasons current automatically (includes current year).
+    current_year = datetime.now().year
+    return {"seasons": list(range(2018, current_year + 1))}
 
 @app.get("/api/{year}/races")
 def get_races(year: int):

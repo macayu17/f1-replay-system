@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-const GapChart = ({ laps, driversInfo, standings, currentTime, totalLaps }) => {
+const GapChart = ({ laps, driversInfo, standings }) => {
     // Calculate gap to leader for each driver at each lap
     const gapData = useMemo(() => {
         if (!laps || laps.length === 0) return [];
