@@ -96,6 +96,7 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
             const isFinished = driver.Status === 'FINISHED';
             const gap = index === 0 ? 'Leader' : (isRetired ? 'OUT' : driver.GapStr);
             const hasFastestLap = fastestLapDriver === driver.Driver;
+            const hasPenalty = String(info?.Status || '').toUpperCase().includes('PEN') || String(driver?.GapStr || '').toUpperCase().includes('PEN');
             const isSelected = selectedDriver === driver.Driver;
             const isComparison = comparisonDriver === driver.Driver;
 
@@ -159,9 +160,14 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
                   <span className="text-[12px] tracking-wide truncate">{info.Abbreviation || driver.Driver}</span>
                 </div>
 
-                {/* Gap & Fastest Lap Badge */}
-                <div className={`w-16 text-right text-[11px] mr-2 font-mono flex items-center justify-end gap-1 ${isRetired ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
-                  {hasFastestLap && <span className="bg-purple-600 text-white text-[8px] px-1 rounded font-bold animate-pulse">FL</span>}
+                {/* Inline status badges between name and timing */}
+                <div className="w-8 mr-1 flex items-center justify-center gap-1">
+                  {hasFastestLap && <span className="bg-purple-600 text-white text-[8px] px-1 rounded font-bold leading-4">FL</span>}
+                  {hasPenalty && <span className="bg-amber-500 text-black text-[9px] px-1 rounded font-black leading-4">!</span>}
+                </div>
+
+                {/* Gap / timing */}
+                <div className={`w-16 text-right text-[11px] mr-2 font-mono flex items-center justify-end ${isRetired ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
                   <span>{gap}</span>
                 </div>
 
