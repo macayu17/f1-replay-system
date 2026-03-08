@@ -10,6 +10,7 @@ import PodiumDisplay from './PodiumDisplay'
 import ReplayControls from './ReplayControls'
 import RaceMessagesPanel from './RaceMessagesPanel'
 import useRaceReplayData from '../hooks/useRaceReplayData'
+import useReplayPlayback from '../hooks/useReplayPlayback'
 
 const RaceReplay = ({ year, raceName, apiUrl }) => {
     const [currentTime, setCurrentTime] = useState(0)
@@ -274,39 +275,20 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         setStandings(currentPositions);
     }, [currentPositions, finalStandings, currentTime, raceEndTime, maxTime]);
 
-    // Animation Loop
-    useEffect(() => {
-        let animationFrameId;
-        let lastTimestamp;
-
-        const animate = (timestamp) => {
-            if (!lastTimestamp) lastTimestamp = timestamp;
-            const deltaTime = (timestamp - lastTimestamp) / 1000; // seconds
-            lastTimestamp = timestamp;
-
-            if (isPlaying) {
-                setCurrentTime(prev => {
-                    const next = prev + (deltaTime * speed);
-                    if (next >= maxTime) {
-                        setIsPlaying(false);
-                        // Trigger podium display when race ends
-                        if (totalLaps > 0 && !showPodium) {
-                            setTimeout(() => setShowPodium(true), 500);
-                        }
-                        return maxTime;
-                    }
-                    return next;
-                });
-                animationFrameId = requestAnimationFrame(animate);
-            }
-        };
-
-        if (isPlaying) {
-            animationFrameId = requestAnimationFrame(animate);
+    const handlePlaybackFinish = useCallback(() => {
+        setIsPlaying(false)
+        if (totalLaps > 0 && !showPodium) {
+            setTimeout(() => setShowPodium(true), 500)
         }
+    }, [totalLaps, showPodium])
 
-        return () => cancelAnimationFrame(animationFrameId);
-    }, [isPlaying, speed, maxTime, totalLaps, showPodium]);
+    useReplayPlayback({
+        isPlaying,
+        speed,
+        maxTime,
+        setCurrentTime,
+        onFinish: handlePlaybackFinish,
+    })
 
     // Freeze leaderboard once the official finish is reached
     useEffect(() => {
