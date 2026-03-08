@@ -47,7 +47,7 @@ function App() {
         <div className="flex items-center gap-4">
           <div className="w-1 h-8 bg-rbr-red rounded-full"></div>
           <h1 className="text-xl md:text-2xl font-display font-semibold tracking-wide uppercase">
-            <span className="text-white/95">PRAH</span> <span className="text-rbr-red">·</span>{' '}
+            <span className="text-white/95">GRIDPULSE</span> <span className="text-rbr-red">·</span>{' '}
             <span className="bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">F1 Replay</span>
             <span className="text-gray-300 text-[10px] font-mono border border-white/20 px-2 py-0.5 rounded-full ml-2 align-middle normal-case">revamp</span>
           </h1>
