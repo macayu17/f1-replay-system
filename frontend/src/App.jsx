@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import axios from 'axios'
-import RaceReplay from './components/RaceReplay'
+
+const RaceReplay = lazy(() => import('./components/RaceReplay'))
 
 function App() {
   const [seasons, setSeasons] = useState([])
@@ -119,7 +120,9 @@ function App() {
               </div>
               
               <div className="p-6">
-                <RaceReplay year={selectedSeason} raceName={selectedRace.EventName} apiUrl={API_URL} />
+                <Suspense fallback={<div className="text-sm text-gray-400 font-mono">Loading replay engine…</div>}>
+                  <RaceReplay year={selectedSeason} raceName={selectedRace.EventName} apiUrl={API_URL} />
+                </Suspense>
               </div>
             </div>
           </div>
