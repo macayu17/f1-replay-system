@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -7,9 +8,10 @@
   --color-rbr-red: #DC0000;
   --color-sector-purple: #B138DD;
   --color-pb-green: #00D2BE;
-  
+
   --font-mono: 'Roboto Mono', monospace;
-  --font-sans: 'Montserrat', 'Inter', sans-serif;
+  --font-sans: 'Inter', 'Montserrat', sans-serif;
+  --font-display: 'Orbitron', 'Inter', sans-serif;
 }
 
 body {

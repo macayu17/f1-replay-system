@@ -16,7 +16,12 @@ function App() {
 
   useEffect(() => {
     axios.get(`${API_URL}/api/seasons`)
-      .then(res => setSeasons(res.data.seasons))
+      .then(res => {
+        const apiSeasons = Array.isArray(res.data?.seasons) ? res.data.seasons : []
+        const currentYear = new Date().getFullYear()
+        const merged = Array.from(new Set([...apiSeasons, currentYear])).sort((a, b) => b - a)
+        setSeasons(merged)
+      })
       .catch(err => console.error(err))
   }, [API_URL])
 
@@ -37,12 +42,14 @@ function App() {
 
   return (
     <div className="min-h-screen bg-rbr-black text-white font-sans flex flex-col">
-      <header className="bg-[#0f1115]/95 border-b border-white/10 p-4 flex justify-between items-center z-10 backdrop-blur">
+      <header className="relative bg-gradient-to-r from-[#0d1018] via-[#101624] to-[#0d1018]/95 border-b border-white/10 p-4 flex justify-between items-center z-10 backdrop-blur shadow-[0_8px_30px_rgba(0,0,0,0.35)]">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-rbr-red/70 to-transparent" />
         <div className="flex items-center gap-4">
           <div className="w-1 h-8 bg-rbr-red rounded-full"></div>
-          <h1 className="text-xl md:text-2xl font-semibold tracking-tight">
-            PRAH <span className="text-rbr-red">·</span> F1 Replay
-            <span className="text-gray-400 text-xs font-mono border border-white/15 px-2 py-0.5 rounded-full ml-2 align-middle">revamp</span>
+          <h1 className="text-xl md:text-2xl font-display font-semibold tracking-wide uppercase">
+            <span className="text-white/95">PRAH</span> <span className="text-rbr-red">·</span>{' '}
+            <span className="bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">F1 Replay</span>
+            <span className="text-gray-300 text-[10px] font-mono border border-white/20 px-2 py-0.5 rounded-full ml-2 align-middle normal-case">revamp</span>
           </h1>
         </div>
         
@@ -50,7 +57,7 @@ function App() {
           <div className="flex flex-col">
             <label className="text-[10px] text-gray-400 uppercase tracking-widest font-mono">Season</label>
             <select 
-              className="bg-black border border-gray-700 p-1 rounded text-white font-mono text-sm focus:border-rbr-red outline-none"
+              className="bg-black/70 border border-white/20 p-1.5 rounded-md text-white font-mono text-sm focus:border-rbr-red outline-none transition-colors"
               onChange={(e) => {
                 const nextSeason = e.target.value
                 setSelectedRace(null)
@@ -72,7 +79,7 @@ function App() {
           <div className="flex flex-col">
             <label className="text-[10px] text-gray-400 uppercase tracking-widest font-mono">Grand Prix</label>
             <select 
-              className="bg-black border border-gray-700 p-1 rounded text-white font-mono text-sm focus:border-rbr-red outline-none min-w-[200px]"
+              className="bg-black/70 border border-white/20 p-1.5 rounded-md text-white font-mono text-sm focus:border-rbr-red outline-none min-w-[220px] transition-colors"
               onChange={(e) => {
                   const race = races.find(r => r.EventName === e.target.value);
                   setSelectedRace(race || null);
