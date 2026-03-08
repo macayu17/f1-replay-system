@@ -370,19 +370,25 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         if (calculatedLap !== currentLap) setCurrentLap(calculatedLap);
     }, [currentTime, lapStartTimes, totalLaps, currentLap, standings]);
 
-    // Fastest lap detection
+    // Live fastest lap (only among laps completed by current replay time)
     const fastestLapInfo = useMemo(() => {
         if (!laps || laps.length === 0) return null;
         let fastest = null;
-        laps.forEach(lap => {
-            if (lap.LapTime && lap.LapTime > 0) {
-                if (!fastest || lap.LapTime < fastest.time) {
-                    fastest = { driver: lap.Driver, time: lap.LapTime, lap: lap.LapNumber };
-                }
+
+        laps.forEach((lap) => {
+            if (!lap?.LapTime || lap.LapTime <= 0) return;
+            if (lap?.LapStartTime == null) return;
+
+            const lapFinishTime = lap.LapStartTime + lap.LapTime;
+            if (lapFinishTime > currentTime) return;
+
+            if (!fastest || lap.LapTime < fastest.time) {
+                fastest = { driver: lap.Driver, time: lap.LapTime, lap: lap.LapNumber };
             }
         });
+
         return fastest;
-    }, [laps]);
+    }, [laps, currentTime]);
 
     // Lap navigation functions
     const goToLap = useCallback((lapNum) => {
