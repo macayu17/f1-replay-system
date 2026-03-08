@@ -78,9 +78,11 @@ const getTeamLogo = (teamName) => {
 const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, selectedDriver, comparisonDriver }) => {
   return (
     <div className="bg-black/90 backdrop-blur-md rounded-lg border border-gray-700 w-full overflow-hidden font-mono text-sm shadow-2xl flex flex-col h-full">
-      <div className="bg-gradient-to-r from-rbr-red to-red-900 text-white font-bold px-3 py-2 uppercase tracking-widest flex items-center justify-between gap-2 shadow-md z-10">
-        <span className="text-[12px] leading-none whitespace-nowrap">Leaderboard</span>
-        <span className="text-[9px] opacity-80 font-normal normal-case tracking-normal whitespace-nowrap hidden sm:inline">Live timing • Shift+click to compare</span>
+      <div className="bg-gradient-to-r from-rbr-red to-red-900 text-white px-3 py-2 shadow-md z-10">
+        <div className="flex items-center justify-between">
+          <span className="text-[12px] font-bold tracking-[0.12em] uppercase leading-none">Leaderboard</span>
+          <span className="text-[9px] opacity-85 font-medium normal-case tracking-normal">Live timing</span>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
