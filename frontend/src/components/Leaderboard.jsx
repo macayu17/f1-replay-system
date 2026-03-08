@@ -158,9 +158,9 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
                 </div>
 
                 {/* Driver Name */}
-                <div className="flex-1 font-bold text-white truncate flex flex-col justify-center leading-tight">
-                  <span className="text-sm tracking-wide">{info.Abbreviation || driver.Driver}</span>
-                  <span className="text-[9px] text-gray-500 uppercase font-normal">{info.LastName}</span>
+                <div className="flex-1 min-w-0 font-bold text-white truncate flex flex-col justify-center leading-tight">
+                  <span className="text-sm tracking-wide truncate">{info.Abbreviation || driver.Driver}</span>
+                  <span className="text-[9px] text-gray-500 uppercase font-normal truncate">{info.LastName}</span>
                 </div>
 
                 {/* Gap & Fastest Lap Badge */}
