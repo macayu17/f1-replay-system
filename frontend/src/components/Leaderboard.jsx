@@ -129,12 +129,9 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
                 <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
 
                 {/* Position */}
-                <div className={`w-10 text-center font-bold text-lg italic ${isFinished && index < 3 ? 'text-white scale-110' : 'text-gray-300'}`}>
+                <div className={`w-8 text-center font-bold text-base italic ${isFinished && index < 3 ? 'text-white' : 'text-gray-300'}`}>
                   {isFinished && index === 0 ? '🏆' : index + 1}
                 </div>
-
-                {/* Team Color Stripe */}
-                <div className="w-1.5 h-6 rounded-full mr-2" style={{ backgroundColor: teamColor }}></div>
 
                 {teamLogo && (
                   <div className="w-7 h-7 mr-2 rounded-md bg-white/90 flex items-center justify-center p-1 shadow-sm">
@@ -158,13 +155,15 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
                 </div>
 
                 {/* Driver Name */}
-                <div className="flex-1 min-w-0 font-bold text-white truncate flex flex-col justify-center leading-tight">
-                  <span className="text-sm tracking-wide truncate">{info.Abbreviation || driver.Driver}</span>
-                  <span className="text-[9px] text-gray-500 uppercase font-normal truncate">{info.LastName}</span>
+                <div className="flex-1 min-w-0 font-semibold text-white flex items-center">
+                  <span className="text-[12px] tracking-wide truncate">
+                    {info.Abbreviation || driver.Driver}
+                    {info.LastName ? <span className="text-gray-400 font-normal ml-1">{info.LastName}</span> : null}
+                  </span>
                 </div>
 
                 {/* Gap & Fastest Lap Badge */}
-                <div className={`w-24 text-right text-xs mr-3 font-mono flex items-center justify-end gap-1 ${isRetired ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
+                <div className={`w-16 text-right text-[11px] mr-2 font-mono flex items-center justify-end gap-1 ${isRetired ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
                   {hasFastestLap && <span className="bg-purple-600 text-white text-[8px] px-1 rounded font-bold animate-pulse">FL</span>}
                   <span>{gap}</span>
                 </div>
