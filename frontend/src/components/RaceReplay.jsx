@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import * as d3 from 'd3'
-import axios from 'axios'
 import Leaderboard from './Leaderboard'
 import TelemetryCharts from './TelemetryCharts'
 import StrategyPanel from './StrategyPanel'
@@ -10,227 +9,56 @@ import GapChart from './GapChart'
 import PodiumDisplay from './PodiumDisplay'
 import ReplayControls from './ReplayControls'
 import RaceMessagesPanel from './RaceMessagesPanel'
+import useRaceReplayData from '../hooks/useRaceReplayData'
 
 const RaceReplay = ({ year, raceName, apiUrl }) => {
-    const [telemetry, setTelemetry] = useState([])
-    const [driversInfo, setDriversInfo] = useState({})
-    const [events, setEvents] = useState([])
-    const [raceControl, setRaceControl] = useState([])
-    const [circuitInfo, setCircuitInfo] = useState({})
-    const [weather, setWeather] = useState([])
-    const [laps, setLaps] = useState([])
-    const [loading, setLoading] = useState(false)
     const [currentTime, setCurrentTime] = useState(0)
-    const [minTime, setMinTime] = useState(0)
-    const [maxTime, setMaxTime] = useState(0)
     const [isPlaying, setIsPlaying] = useState(false)
     const [speed, setSpeed] = useState(1)
     const [standings, setStandings] = useState([])
     const [selectedDriver, setSelectedDriver] = useState(null)
-    const [comparisonDriver, setComparisonDriver] = useState(null) // For driver comparison mode
-    const [teamRadio, setTeamRadio] = useState([])
-    const [totalLaps, setTotalLaps] = useState(0)
-    const [showPodium, setShowPodium] = useState(false) // Podium display state
-    const [currentLap, setCurrentLap] = useState(1) // Current lap counter
-    const [raceStartTime, setRaceStartTime] = useState(0) // Time when race actually started (Lap 1)
-    const [raceEndTime, setRaceEndTime] = useState(0) // Winner finish time (Lap N complete)
-    const [finalStandings, setFinalStandings] = useState(null) // Freeze leaderboard at official finish
+    const [comparisonDriver, setComparisonDriver] = useState(null)
+    const [showPodium, setShowPodium] = useState(false)
+    const [currentLap, setCurrentLap] = useState(1)
+    const [finalStandings, setFinalStandings] = useState(null)
 
     const svgRef = useRef()
 
-    // Use prop if available, otherwise fallback (though prop should always be there from App.jsx)
-    const API_URL = apiUrl || import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const API_URL = apiUrl || import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-    const parseTimeSeconds = useCallback((value) => {
-        if (value == null) return null;
-        if (typeof value === 'number' && Number.isFinite(value)) return value;
-        if (typeof value === 'string') {
-            const s = value.trim();
-            if (!s) return null;
-
-            // Handle common formats like "0 days 00:12:34.567" or "00:12:34.567"
-            const daysMatch = s.match(/^(\d+)\s+days?\s+(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d+))?$/i);
-            const hmsMatch = s.match(/^(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d+))?$/);
-            const msMatch = s.match(/^(\d{1,2}):(\d{2})(?:\.(\d+))?$/); // mm:ss(.ms)
-
-            const toSeconds = (days, h, m, sec, frac) => {
-                const ms = frac ? Number(`0.${frac}`) : 0;
-                return (Number(days) * 86400) + (Number(h) * 3600) + (Number(m) * 60) + Number(sec) + ms;
-            };
-
-            if (daysMatch) {
-                const [, d, h, m, sec, frac] = daysMatch;
-                return toSeconds(d, h, m, sec, frac);
-            }
-            if (hmsMatch) {
-                const [, h, m, sec, frac] = hmsMatch;
-                return toSeconds(0, h, m, sec, frac);
-            }
-            if (msMatch) {
-                const [, m, sec, frac] = msMatch;
-                return toSeconds(0, 0, m, sec, frac);
-            }
-
-            // Epoch milliseconds/seconds as string
-            const asNum = Number(s);
-            if (Number.isFinite(asNum)) {
-                // if it's clearly epoch milliseconds
-                if (asNum > 1e12) return asNum / 1000;
-                return asNum;
-            }
-        }
-        return null;
-    }, []);
-
-    const normalizeMessages = useCallback((msgs, timeBase) => {
-        const base = (typeof timeBase === 'number' && Number.isFinite(timeBase)) ? timeBase : 0;
-        return (Array.isArray(msgs) ? msgs : [])
-            .map((m) => {
-                const rawTime = m?.Time ?? m?.SessionTime ?? m?.time ?? m?.sessionTime ?? null;
-                let t = parseTimeSeconds(rawTime);
-
-                // If backend hasn't shifted but provides time_base, shift into replay timeline
-                if (t != null && base && t > base + 60 * 60 && t > 1e6) {
-                    // Likely epoch seconds; do not shift
-                } else if (t != null && base && t > base && t > 60 * 10) {
-                    // Likely session-relative but unshifted; shift to match telemetry timeline
-                    t = t - base;
-                }
-
-                const messageText = m?.Message ?? m?.Text ?? m?.message ?? m?.text ?? '';
-                return { ...m, Time: t ?? 0, Message: String(messageText ?? '') };
-            })
-            .filter((m) => Number.isFinite(m.Time))
-            .sort((a, b) => a.Time - b.Time);
-    }, [parseTimeSeconds]);
+    const {
+        loading,
+        error,
+        retry,
+        telemetry,
+        driversInfo,
+        events,
+        raceControl,
+        circuitInfo,
+        weather,
+        laps,
+        teamRadio,
+        totalLaps,
+        minTime,
+        maxTime,
+        raceStartTime,
+        raceEndTime,
+        initialTime,
+    } = useRaceReplayData({ year, raceName, apiUrl: API_URL })
 
     useEffect(() => {
-        setLoading(true)
-        setTelemetry([])
-        setDriversInfo({})
-        setEvents([])
-        setRaceControl([])
-        setCircuitInfo({})
-        setWeather([])
-        setTeamRadio([])
         setStandings([])
         setShowPodium(false)
         setIsPlaying(false)
         setCurrentLap(1)
-        setRaceStartTime(0)
-        setRaceEndTime(0)
         setFinalStandings(null)
-        setMinTime(0)
-        setMaxTime(0)
-        setCurrentTime(0)
+        setSelectedDriver(null)
+        setComparisonDriver(null)
+    }, [year, raceName])
 
-        const fetchData = async () => {
-            try {
-                // Fetch Team Radio first
-                const radioRes = await axios.get(`${API_URL}/api/${year}/${raceName}/race/team_radio`);
-                setTeamRadio(normalizeMessages(radioRes.data, 0));
-            } catch (err) {
-                console.error("Radio fetch error", err);
-            }
-
-            try {
-                // Then fetch Telemetry
-                const res = await axios.get(`${API_URL}/api/${year}/${raceName}/race/telemetry_replay`);
-                const data = res.data.telemetry
-                setTelemetry(data)
-                setDriversInfo(res.data.drivers || {})
-                setEvents(res.data.events || [])
-                setRaceControl(normalizeMessages(res.data.race_control, res.data.time_base))
-                setCircuitInfo(res.data.circuit_info || {})
-                setWeather(res.data.weather || [])
-                setLaps(res.data.laps || [])
-                setTotalLaps(res.data.total_laps || 0)
-
-                if (data.length > 0) {
-                    const fetchedLaps = res.data.laps || [];
-                    const drivers = res.data.drivers || {};
-
-                    const absoluteMin = d3.min(data, d => d.Time);
-                    const absoluteMax = d3.max(data, d => d.Time);
-
-                    // Compute official lap start times (earliest LapStartTime per LapNumber)
-                    const startTimes = {};
-                    fetchedLaps.forEach(l => {
-                        if (l?.LapNumber && l.LapStartTime !== null && l.LapStartTime !== undefined) {
-                            const n = l.LapNumber;
-                            if (startTimes[n] === undefined || l.LapStartTime < startTimes[n]) {
-                                startTimes[n] = l.LapStartTime;
-                            }
-                        }
-                    });
-
-                    // Race start = Lap 1 start (from FastF1)
-                    // Start the replay slightly before Lap 1 to show the grid/formation when available.
-                    const lap1Start = startTimes[1] !== undefined ? startTimes[1] : absoluteMin;
-                    const startAt = Math.max(absoluteMin, lap1Start - 10);
-                    setRaceStartTime(lap1Start);
-
-                    // Race end = winner finish time.
-                    // Prefer official results total time when available (most reliable).
-                    const total = res.data.total_laps || 0;
-                    let endAt = 0;
-
-                    if (total > 0) {
-                        const winnerKey = Object.keys(drivers).find(k => drivers[k]?.ClassifiedPosition === 1);
-                        if (winnerKey) {
-                            const winnerTotalTime = drivers[winnerKey]?.TotalTime;
-                            if (winnerTotalTime != null && winnerTotalTime > 0 && lap1Start != null) {
-                                endAt = lap1Start + winnerTotalTime;
-                            }
-
-                            const winnerLap = fetchedLaps.find(l => l.Driver === winnerKey && l.LapNumber === total);
-                            if (!endAt && winnerLap?.LapStartTime != null && winnerLap?.LapTime != null && winnerLap.LapTime > 0) {
-                                endAt = winnerLap.LapStartTime + winnerLap.LapTime;
-                            }
-
-                            // Fallback: if LapTime is missing on the final lap, estimate using winner's median lap time
-                            if (!endAt) {
-                                const lastStart = startTimes[total];
-                                const winnerLapTimes = fetchedLaps
-                                    .filter(l => l.Driver === winnerKey && l.LapTime != null && l.LapTime > 0)
-                                    .map(l => l.LapTime)
-                                    .sort((a, b) => a - b);
-                                if (lastStart !== undefined && winnerLapTimes.length > 0) {
-                                    const mid = Math.floor(winnerLapTimes.length / 2);
-                                    const median = winnerLapTimes.length % 2
-                                        ? winnerLapTimes[mid]
-                                        : (winnerLapTimes[mid - 1] + winnerLapTimes[mid]) / 2;
-                                    endAt = lastStart + median;
-                                }
-                            }
-                        }
-
-                        // Fallback: earliest finisher on final lap
-                        if (!endAt) {
-                            const finalLaps = fetchedLaps.filter(l => l.LapNumber === total && l.LapStartTime != null && l.LapTime != null && l.LapTime > 0);
-                            if (finalLaps.length > 0) {
-                                endAt = Math.min(...finalLaps.map(l => l.LapStartTime + l.LapTime));
-                            }
-                        }
-                    }
-
-                    // Clamp UI range to official race window
-                    const min = startAt;
-                    const max = endAt && endAt > min ? Math.min(absoluteMax, endAt + 10) : absoluteMax;
-                    setRaceEndTime(endAt || 0);
-                    setMinTime(min);
-                    setMaxTime(max);
-                    setCurrentTime(min);
-                }
-            } catch (err) {
-                console.error("Telemetry fetch error", err);
-            } finally {
-                setLoading(false)
-            }
-        };
-
-        fetchData();
-    }, [year, raceName, API_URL, normalizeMessages])
+    useEffect(() => {
+        setCurrentTime(initialTime)
+    }, [initialTime])
 
     const clampTime = useCallback((t) => {
         const lower = minTime ?? 0;
@@ -839,7 +667,19 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 </div>
             )}
 
-            {!loading && (
+            {!loading && error && (
+                <div className="w-full h-[300px] flex flex-col items-center justify-center gap-4 border border-red-900/40 rounded bg-red-950/20">
+                    <div className="text-red-300 font-mono text-sm">{error}</div>
+                    <button
+                        onClick={retry}
+                        className="px-4 py-2 bg-rbr-red text-white rounded text-xs font-mono hover:bg-red-700"
+                    >
+                        RETRY LOAD
+                    </button>
+                </div>
+            )}
+
+            {!loading && !error && (
                 <div className="w-full max-w-[1800px] p-4 flex flex-col gap-4 min-h-[calc(100vh-80px)]">
 
                     {/* Header with Logo */}
