@@ -20,7 +20,7 @@ const TEAM_LOGOS = {
   'Red Bull': 'https://media.formula1.com/content/dam/fom-website/teams/2024/red-bull-racing-logo.png.transform/2col/image.png',
   // McLaren
   'McLaren': 'https://media.formula1.com/content/dam/fom-website/teams/2024/mclaren-logo.png.transform/2col/image.png',
-  // Ferrari  
+  // Ferrari
   'Ferrari': 'https://media.formula1.com/content/dam/fom-website/teams/2024/ferrari-logo.png.transform/2col/image.png',
   'Scuderia Ferrari': 'https://media.formula1.com/content/dam/fom-website/teams/2024/ferrari-logo.png.transform/2col/image.png',
   // Mercedes
@@ -81,15 +81,15 @@ const getTeamLogo = (teamName) => {
 
 const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, selectedDriver, comparisonDriver }) => {
   return (
-    <div className="bg-black/90 backdrop-blur-md rounded-lg border border-gray-700 w-full overflow-hidden font-mono text-sm shadow-2xl flex flex-col h-full">
-      <div className="bg-gradient-to-r from-rbr-red to-red-900 text-white px-3 py-2 shadow-md z-10">
+    <div className="velocity-panel velocity-mono flex h-full w-full flex-col overflow-hidden text-sm">
+      <div className="terminal-pane-title z-10">
         <div className="flex items-center justify-between">
-          <span className="text-[12px] font-bold tracking-[0.12em] uppercase leading-none">Leaderboard</span>
-          <span className="text-[9px] opacity-85 font-medium normal-case tracking-normal">Live timing</span>
+          <span className="velocity-label text-white">Leaderboard</span>
+          <span className="text-[9px] font-medium uppercase text-[#f6a11a]">Live timing</span>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+      <div className="custom-scrollbar flex-1 overflow-y-auto">
         <div className="flex flex-col">
           {standings.map((driver, index) => {
             const info = driversInfo[driver.Driver] || {};
@@ -106,24 +106,24 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
             const isSelected = selectedDriver === driver.Driver;
             const isComparison = comparisonDriver === driver.Driver;
 
-            let rowClass = `flex items-center h-10 border-b border-gray-800 hover:bg-gray-800 cursor-pointer transition-all group relative overflow-hidden ${isRetired ? 'opacity-50 grayscale' : ''}`;
+            let rowClass = `group relative flex h-9 cursor-pointer items-center overflow-hidden border-b border-[#f6a11a]/10 transition-all hover:bg-[#f6a11a]/10 ${isRetired ? 'opacity-50 grayscale' : ''}`;
 
             // Selection highlighting
             if (isSelected) {
-              rowClass += " bg-rbr-red/20 border-l-4 border-l-rbr-red";
+              rowClass += " border-l-2 border-l-rbr-red bg-rbr-red/14";
             } else if (isComparison) {
-              rowClass += " bg-blue-500/20 border-l-4 border-l-blue-500";
+              rowClass += " border-l-2 border-l-blue-500 bg-blue-500/14";
             }
             // Fastest lap highlighting (purple glow)
             else if (hasFastestLap) {
-              rowClass += " bg-purple-500/20 border-l-4 border-l-purple-500 shadow-[0_0_10px_rgba(177,56,221,0.3)]";
+              rowClass += " border-l-2 border-l-purple-500 bg-purple-500/14 shadow-[0_0_10px_rgba(177,56,221,0.2)]";
             }
             // Podium Highlight
             else if (isFinished) {
-              if (index === 0) rowClass += " bg-yellow-500/20 border-l-4 border-l-yellow-500"; // Gold
-              else if (index === 1) rowClass += " bg-gray-400/20 border-l-4 border-l-gray-400"; // Silver
-              else if (index === 2) rowClass += " bg-orange-700/20 border-l-4 border-l-orange-700"; // Bronze
-              else rowClass += " bg-green-900/20 border-l-4 border-l-green-900"; // Other finishers
+              if (index === 0) rowClass += " border-l-2 border-l-yellow-500 bg-yellow-500/12";
+              else if (index === 1) rowClass += " border-l-2 border-l-gray-400 bg-gray-400/10";
+              else if (index === 2) rowClass += " border-l-2 border-l-orange-700 bg-orange-700/10";
+              else rowClass += " border-l-2 border-l-green-900 bg-green-900/10";
             }
 
             return (
@@ -133,15 +133,14 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
                 className={rowClass}
               >
                 {/* Hover Effect */}
-                <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+                <div className="pointer-events-none absolute inset-0 bg-white/5 opacity-0 transition-opacity group-hover:opacity-100"></div>
 
-                {/* Position */}
-                <div className={`w-8 text-center font-bold text-base italic ${isFinished && index < 3 ? 'text-white' : 'text-gray-300'}`}>
-                  {isFinished && index === 0 ? '🏆' : index + 1}
+                <div className={`w-7 text-center text-sm font-bold ${isFinished && index < 3 ? 'text-white' : 'text-white/70'}`}>
+                  {index + 1}
                 </div>
 
                 {teamLogo && (
-                  <div className="w-7 h-7 mr-2 rounded-md bg-white/90 flex items-center justify-center p-1 shadow-sm">
+                  <div className="mr-2 flex h-6 w-6 items-center justify-center rounded-sm bg-white/90 p-1 shadow-sm">
                     <img
                       src={teamLogo}
                       alt={teamName}
@@ -150,9 +149,8 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
                   </div>
                 )}
 
-                {/* Driver Number Badge (F1 TV Style) */}
                 <div
-                  className="w-8 h-6 mr-2 flex items-center justify-center rounded text-[11px] font-black text-white shadow-md"
+                  className="mr-2 flex h-5 w-8 items-center justify-center rounded-sm text-[10px] font-black text-white shadow-md"
                   style={{
                     backgroundColor: teamColor,
                     border: '1px solid rgba(255,255,255,0.2)'
@@ -161,31 +159,27 @@ const Leaderboard = ({ standings, driversInfo, onDriverClick, fastestLapDriver, 
                   {info.DriverNumber || driver.Driver}
                 </div>
 
-                {/* Driver Name */}
                 <div className="flex-1 min-w-0 font-semibold text-white flex items-center">
                   <span className="text-[12px] tracking-wide truncate">{info.Abbreviation || driver.Driver}</span>
                 </div>
 
-                {/* Inline status badges between name and timing */}
-                <div className="w-8 mr-1 flex items-center justify-center gap-1">
-                  {hasFastestLap && <span className="bg-purple-600 text-white text-[8px] px-1 rounded font-bold leading-4">FL</span>}
-                  {hasPenalty && <span className="bg-amber-500 text-black text-[9px] px-1 rounded font-black leading-4">!</span>}
+                <div className="mr-1 flex w-8 items-center justify-center gap-1">
+                  {hasFastestLap && <span className="rounded bg-purple-600 px-1 text-[8px] font-bold leading-4 text-white">FL</span>}
+                  {hasPenalty && <span className="rounded bg-rbr-yellow px-1 text-[9px] font-black leading-4 text-black">!</span>}
                 </div>
 
-                {/* Gap / timing */}
-                <div className={`w-16 text-right text-[11px] mr-2 font-mono flex items-center justify-end ${isRetired ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
+                <div className={`mr-2 flex w-16 items-center justify-end text-right text-[11px] ${isRetired ? 'font-bold text-red-400' : 'text-white/55'}`}>
                   <span>{gap}</span>
                 </div>
 
-                {/* Tyre */}
                 {!isRetired && (
-                  <div className={`w-6 h-6 flex items-center justify-center rounded-full border-2 ${tyreClass} text-[10px] font-bold mr-3 scale-90 shadow-sm`}>
+                  <div className={`mr-3 flex h-5 w-5 scale-90 items-center justify-center rounded-sm border ${tyreClass} text-[9px] font-bold shadow-sm`}>
                     {tyre === 'UNKNOWN' ? '?' : tyre[0]}
                   </div>
                 )}
                 {isRetired && (
-                  <div className="w-6 h-6 flex items-center justify-center mr-3 text-red-600 font-bold text-xs">
-                    ❌
+                  <div className="mr-3 flex h-6 w-6 items-center justify-center text-xs font-bold text-red-500">
+                    RET
                   </div>
                 )}
               </div>

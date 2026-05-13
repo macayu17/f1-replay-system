@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { isLapStarted, isSectorVisible } from '../utils/replayMath';
 
 const SectorTimes = ({ laps, driversInfo, standings, currentTime }) => {
     // Get the most recent sector times for each driver
@@ -12,15 +13,23 @@ const SectorTimes = ({ laps, driversInfo, standings, currentTime }) => {
         const allS3 = [];
 
         laps.forEach(lap => {
-            if (lap.Sector1Time) allS1.push(lap.Sector1Time);
-            if (lap.Sector2Time) allS2.push(lap.Sector2Time);
-            if (lap.Sector3Time) allS3.push(lap.Sector3Time);
+            const s1Visible = isSectorVisible(lap, 'Sector1', currentTime);
+            const s2Visible = isSectorVisible(lap, 'Sector2', currentTime);
+            const s3Visible = isSectorVisible(lap, 'Sector3', currentTime);
 
-            // Only consider laps that have started before current time
-            if (lap.LapStartTime && lap.LapStartTime <= currentTime) {
+            if (s1Visible) allS1.push(lap.Sector1Time);
+            if (s2Visible) allS2.push(lap.Sector2Time);
+            if (s3Visible) allS3.push(lap.Sector3Time);
+
+            if (isLapStarted(lap, currentTime) && (s1Visible || s2Visible || s3Visible)) {
                 const existing = driverLatest[lap.Driver];
                 if (!existing || lap.LapNumber > existing.LapNumber) {
-                    driverLatest[lap.Driver] = lap;
+                    driverLatest[lap.Driver] = {
+                        ...lap,
+                        Sector1Time: s1Visible ? lap.Sector1Time : null,
+                        Sector2Time: s2Visible ? lap.Sector2Time : null,
+                        Sector3Time: s3Visible ? lap.Sector3Time : null,
+                    };
                 }
             }
         });
@@ -60,14 +69,14 @@ const SectorTimes = ({ laps, driversInfo, standings, currentTime }) => {
     };
 
     return (
-        <div className="bg-gray-900/80 border border-gray-700 rounded p-3 backdrop-blur-sm">
-            <h3 className="text-white text-[10px] font-bold uppercase tracking-widest border-b border-gray-700 pb-1 mb-2 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-sector-purple"></span>
+        <div className="velocity-panel p-3">
+            <h3 className="velocity-label mb-3 flex items-center gap-2 border-b border-white/10 pb-2 text-white">
+                <span className="h-1.5 w-1.5 bg-sector-purple"></span>
                 Sector Times
             </h3>
 
-            <table className="w-full text-[10px] font-mono">
-                <thead className="text-gray-500">
+            <table className="velocity-mono w-full text-[10px]">
+                <thead className="text-white/45">
                     <tr>
                         <th className="text-left px-1">POS</th>
                         <th className="text-left px-1">DRIVER</th>
@@ -80,9 +89,9 @@ const SectorTimes = ({ laps, driversInfo, standings, currentTime }) => {
                     {sectorData.drivers.map((d, i) => {
                         const info = driversInfo[d.driver] || {};
                         return (
-                            <tr key={d.driver} className="border-t border-gray-800 hover:bg-gray-800/50">
-                                <td className="px-1 py-0.5 text-gray-400">{i + 1}</td>
-                                <td className="px-1 py-0.5 font-bold text-white flex items-center gap-1">
+                            <tr key={d.driver} className="border-t border-white/10 hover:bg-white/5">
+                                <td className="px-1 py-0.5 text-white/55">{i + 1}</td>
+                                <td className="flex items-center gap-1 px-1 py-0.5 font-bold text-white">
                                     <div className="w-0.5 h-3" style={{ backgroundColor: info.TeamColor }}></div>
                                     {info.Abbreviation || d.driver}
                                 </td>
@@ -101,8 +110,8 @@ const SectorTimes = ({ laps, driversInfo, standings, currentTime }) => {
                 </tbody>
             </table>
 
-            <div className="mt-2 flex gap-3 text-[9px] text-gray-500">
-                <span><span className="text-sector-purple">●</span> Overall Best</span>
+            <div className="velocity-mono mt-2 flex gap-3 text-[9px] text-white/45">
+                <span><span className="text-sector-purple">■</span> Overall Best</span>
             </div>
         </div>
     );

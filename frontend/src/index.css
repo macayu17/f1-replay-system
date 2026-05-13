@@ -1,45 +1,100 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-rbr-black: #0A0A0A;
-  --color-rbr-charcoal: #121212;
-  --color-rbr-yellow: #FCD700;
-  --color-rbr-red: #DC0000;
+  --color-rbr-black: #0B0B0B;
+  --color-rbr-charcoal: #1C1917;
+  --color-rbr-yellow: #BC5614;
+  --color-rbr-red: #FF1801;
   --color-sector-purple: #B138DD;
   --color-pb-green: #00D2BE;
 
-  --font-mono: 'Roboto Mono', monospace;
-  --font-sans: 'Inter', 'Montserrat', sans-serif;
-  --font-display: 'Orbitron', 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+  --carbon: #0b0b0b;
+  --carbon-soft: #08090a;
+  --glass: rgba(5, 7, 8, 0.88);
+  --glass-strong: rgba(7, 8, 9, 0.96);
+  --glass-border: rgba(188, 86, 20, 0.2);
+  --glass-border-hot: rgba(255, 24, 1, 0.34);
+  --circuit-white: #fbfbf9;
+  --text-muted: rgba(229, 226, 225, 0.62);
+  --text-soft: rgba(255, 196, 120, 0.82);
+  --racing-red: #ff1801;
+  --telemetry-amber: #bc5614;
+  --terminal-amber: #f6a11a;
+  --terminal-green: #25d366;
+  --terminal-cyan: #26d9ff;
+  --asphalt: #71717a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--carbon);
 }
 
 body {
   background:
-    radial-gradient(1200px 800px at 80% -10%, rgba(220, 0, 0, 0.12), transparent 60%),
-    radial-gradient(1000px 700px at -10% 20%, rgba(255, 255, 255, 0.05), transparent 60%),
-    var(--color-rbr-black);
-  color: #E0E0E0;
+    linear-gradient(rgba(246, 161, 26, 0.024) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(246, 161, 26, 0.018) 1px, transparent 1px),
+    radial-gradient(760px 400px at 80% -12%, rgba(255, 24, 1, 0.12), transparent 58%),
+    linear-gradient(90deg, #050607, #080a0b 48%, #050607);
+  background-size: 24px 24px, 24px 24px, auto, auto;
+  color: var(--circuit-white);
   overflow-x: hidden;
+  font-family: var(--font-sans);
+  min-width: 320px;
+}
+
+button,
+select,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled {
+  cursor: not-allowed;
+}
+
+::selection {
+  background: rgba(255, 24, 1, 0.36);
+  color: var(--circuit-white);
+}
+
+#root {
+  min-height: 100vh;
 }
 
 /* Custom Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #111;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #444;
-  border-radius: 2px;
+  background: rgba(246, 161, 26, 0.55);
+  border-radius: 0;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #666;
+  background: rgba(246, 161, 26, 0.88);
 }
 
 /* Animations */
@@ -59,4 +114,217 @@ body {
 
 .bg-sector-purple {
   background-color: var(--color-sector-purple);
+}
+
+.velocity-app {
+  min-height: 100vh;
+  background:
+    linear-gradient(rgba(246, 161, 26, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(246, 161, 26, 0.018) 1px, transparent 1px),
+    radial-gradient(900px 500px at 50% -12%, rgba(188, 86, 20, 0.13), transparent 65%),
+    transparent;
+  background-size: 28px 28px, 28px 28px, auto, auto;
+}
+
+.velocity-shell {
+  width: min(100%, 1920px);
+  margin: 0 auto;
+}
+
+.velocity-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg, rgba(246, 161, 26, 0.045), rgba(255, 255, 255, 0.006)),
+    var(--glass);
+  box-shadow:
+    inset 0 1px 0 rgba(246, 161, 26, 0.07),
+    0 10px 28px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(12px);
+}
+
+.velocity-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(246, 161, 26, 0.6), rgba(255, 24, 1, 0.44), rgba(246, 161, 26, 0.08));
+  opacity: 0.88;
+  pointer-events: none;
+}
+
+.velocity-panel.is-hot {
+  border-color: var(--glass-border-hot);
+  box-shadow:
+    inset 0 0 0 1px rgba(246, 161, 26, 0.05),
+    0 0 18px rgba(255, 24, 1, 0.1),
+    0 14px 34px rgba(0, 0, 0, 0.38);
+}
+
+.velocity-label {
+  color: var(--terminal-amber);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.velocity-mono {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+.velocity-input {
+  min-height: 34px;
+  border: 1px solid rgba(246, 161, 26, 0.22);
+  border-radius: 2px;
+  background:
+    linear-gradient(180deg, rgba(246, 161, 26, 0.045), transparent),
+    rgba(2, 3, 4, 0.94);
+  color: var(--circuit-white);
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.velocity-input:focus {
+  border-color: rgba(246, 161, 26, 0.82);
+  box-shadow: 0 0 0 1px rgba(246, 161, 26, 0.2), 0 0 10px rgba(246, 161, 26, 0.16);
+}
+
+.velocity-input:disabled {
+  opacity: 0.48;
+}
+
+.velocity-input option {
+  background: #0b0b0b;
+  color: var(--circuit-white);
+}
+
+.velocity-button {
+  border: 1px solid rgba(246, 161, 26, 0.45);
+  border-radius: 2px;
+  background: linear-gradient(180deg, #f6a11a, #9f5108);
+  color: #070707;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: 0 0 14px rgba(246, 161, 26, 0.16);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.velocity-button:hover {
+  box-shadow: 0 0 22px rgba(246, 161, 26, 0.28);
+  transform: translateY(-1px);
+}
+
+.velocity-button.secondary {
+  color: var(--terminal-amber);
+  border-color: rgba(246, 161, 26, 0.25);
+  background: rgba(246, 161, 26, 0.045);
+  box-shadow: none;
+}
+
+.velocity-button.secondary:hover {
+  border-color: rgba(246, 161, 26, 0.62);
+  box-shadow: 0 0 14px rgba(246, 161, 26, 0.12);
+}
+
+.metric-tile {
+  border: 1px solid rgba(246, 161, 26, 0.14);
+  border-radius: 2px;
+  background:
+    linear-gradient(180deg, rgba(246, 161, 26, 0.035), transparent),
+    rgba(3, 4, 5, 0.72);
+  box-shadow: inset 0 1px 0 rgba(246, 161, 26, 0.05);
+}
+
+.track-stage {
+  background:
+    radial-gradient(circle at 50% 45%, rgba(246, 161, 26, 0.07), transparent 38%),
+    linear-gradient(135deg, rgba(246, 161, 26, 0.035) 0 1px, transparent 1px 32px),
+    #030405;
+}
+
+.track-grid {
+  background-image:
+    linear-gradient(rgba(246, 161, 26, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(246, 161, 26, 0.09) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(circle at center, black, transparent 78%);
+}
+
+input[type="range"] {
+  background: transparent;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  border: 1px solid rgba(246, 161, 26, 0.14);
+  background: linear-gradient(90deg, rgba(246, 161, 26, 0.95), rgba(255, 24, 1, 0.64), rgba(113, 113, 122, 0.28));
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  width: 14px;
+  height: 18px;
+  margin-top: -8px;
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 1px;
+  background: var(--terminal-amber);
+  box-shadow: 0 0 14px rgba(246, 161, 26, 0.46);
+}
+
+.terminal-tape {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(120px, auto);
+  gap: 1px;
+  overflow-x: auto;
+  border-top: 1px solid rgba(246, 161, 26, 0.16);
+  border-bottom: 1px solid rgba(246, 161, 26, 0.16);
+  background: rgba(246, 161, 26, 0.12);
+}
+
+.terminal-cell {
+  min-height: 34px;
+  padding: 7px 10px;
+  background: rgba(3, 4, 5, 0.9);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.terminal-key {
+  color: rgba(251, 251, 249, 0.45);
+}
+
+.terminal-value {
+  color: var(--terminal-amber);
+  font-weight: 700;
+}
+
+.terminal-up {
+  color: var(--terminal-green);
+}
+
+.terminal-down {
+  color: var(--racing-red);
+}
+
+.terminal-pane-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 30px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(246, 161, 26, 0.13);
+  background: rgba(246, 161, 26, 0.055);
 }

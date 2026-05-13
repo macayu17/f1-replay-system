@@ -13,46 +13,54 @@ const ReplayControls = ({
   speed,
   onSpeedChange,
 }) => {
+  const safeTotalLaps = Math.max(1, totalLaps || 1)
+  const safeCurrentLap = Math.min(safeTotalLaps, Math.max(1, currentLap || 1))
+
   return (
-    <div className="bg-gray-900/80 p-2 rounded border border-gray-700 flex gap-4 items-center shadow-lg backdrop-blur-sm shrink-0">
+    <div className="velocity-panel flex shrink-0 flex-col gap-2 p-2 xl:flex-row xl:items-center xl:gap-3">
       <button
-        className={`px-4 py-1.5 rounded font-bold font-mono text-xs transition-all tracking-wider ${isPlaying ? 'bg-rbr-red text-white hover:bg-red-700 shadow-[0_0_15px_rgba(220,0,0,0.4)]' : 'bg-white text-black hover:bg-gray-200'}`}
+        type="button"
+        className={`velocity-button h-8 px-4 ${isPlaying ? '' : 'secondary'}`}
         onClick={onTogglePlay}
         title="Space to toggle"
       >
-        {isPlaying ? 'PAUSE' : 'PLAY'}
+        {isPlaying ? 'Pause' : 'Play'}
       </button>
 
-      <div className="flex items-center gap-1 border-l border-gray-600 pl-4">
+      <div className="flex items-center gap-1 xl:border-l xl:border-white/10 xl:pl-4">
         <button
+          type="button"
           onClick={onPrevLap}
-          disabled={currentLap <= 1}
-          className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed text-white font-mono text-xs transition-colors"
+          disabled={safeCurrentLap <= 1}
+          className="velocity-button secondary h-8 w-8 disabled:opacity-30"
           title="← Previous lap"
+          aria-label="Previous lap"
         >
-          ◀
+          &lt;
         </button>
         <select
-          value={Math.max(1, currentLap)}
+          value={safeCurrentLap}
           onChange={(e) => onGoToLap(Number(e.target.value))}
-          className="bg-black border border-gray-600 text-white p-1 rounded font-mono text-[10px] outline-none focus:border-rbr-red w-16 text-center"
+          className="velocity-input velocity-mono h-8 min-h-0 w-24 px-2 text-center text-[10px]"
         >
-          {Array.from({ length: totalLaps }, (_, i) => i + 1).map((lap) => (
+          {Array.from({ length: safeTotalLaps }, (_, i) => i + 1).map((lap) => (
             <option key={lap} value={lap}>LAP {lap}</option>
           ))}
         </select>
         <button
+          type="button"
           onClick={onNextLap}
-          disabled={currentLap >= totalLaps}
-          className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed text-white font-mono text-xs transition-colors"
+          disabled={safeCurrentLap >= safeTotalLaps}
+          className="velocity-button secondary h-8 w-8 disabled:opacity-30"
           title="→ Next lap"
+          aria-label="Next lap"
         >
-          ▶
+          &gt;
         </button>
       </div>
 
-      <div className="flex-grow flex flex-col justify-center gap-1">
-        <div className="flex justify-between text-[9px] text-gray-400 font-mono">
+      <div className="flex min-w-[220px] flex-grow flex-col justify-center gap-2">
+        <div className="velocity-mono flex justify-between text-[9px] text-white/50">
           <span>START</span>
           <span>FINISH</span>
         </div>
@@ -62,14 +70,15 @@ const ReplayControls = ({
           max={maxTime}
           value={currentTime}
           onChange={(e) => onSeek(Number(e.target.value))}
-          className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-rbr-red hover:accent-white transition-all"
+          className="w-full appearance-none"
+          aria-label="Replay timeline"
         />
       </div>
 
-      <div className="flex items-center gap-2 border-l border-gray-600 pl-4">
-        <span className="text-[9px] font-mono text-gray-400 uppercase">Speed</span>
+      <div className="flex items-center gap-2 xl:border-l xl:border-white/10 xl:pl-4">
+        <span className="velocity-label">Speed</span>
         <select
-          className="bg-black border border-gray-600 text-white p-1 rounded font-mono text-[10px] outline-none focus:border-rbr-red hover:border-gray-400 transition-colors"
+          className="velocity-input velocity-mono h-8 min-h-0 px-2 text-[10px]"
           value={speed}
           onChange={(e) => onSpeedChange(Number(e.target.value))}
         >
@@ -79,11 +88,6 @@ const ReplayControls = ({
           <option value="20">20x</option>
           <option value="60">60x</option>
         </select>
-      </div>
-
-      <div className="text-[8px] text-gray-600 font-mono border-l border-gray-600 pl-4 hidden lg:block">
-        <div>SPACE: Play/Pause</div>
-        <div>←→: Prev/Next Lap</div>
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import * as d3 from 'd3'
 import Leaderboard from './Leaderboard'
 import TelemetryCharts from './TelemetryCharts'
@@ -11,19 +11,17 @@ import ReplayControls from './ReplayControls'
 import RaceMessagesPanel from './RaceMessagesPanel'
 import useRaceReplayData from '../hooks/useRaceReplayData'
 import useReplayPlayback from '../hooks/useReplayPlayback'
+import { asFiniteNumber, formatRaceClock, isLapCompleted } from '../utils/replayMath'
 
 const RaceReplay = ({ year, raceName, apiUrl }) => {
     const [currentTime, setCurrentTime] = useState(0)
     const [isPlaying, setIsPlaying] = useState(false)
     const [speed, setSpeed] = useState(1)
-    const [standings, setStandings] = useState([])
     const [selectedDriver, setSelectedDriver] = useState(null)
     const [comparisonDriver, setComparisonDriver] = useState(null)
     const [showPodium, setShowPodium] = useState(false)
     const [currentLap, setCurrentLap] = useState(1)
     const [finalStandings, setFinalStandings] = useState(null)
-
-    const svgRef = useRef()
 
     const API_URL = apiUrl || import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -48,7 +46,6 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
     } = useRaceReplayData({ year, raceName, apiUrl: API_URL })
 
     useEffect(() => {
-        setStandings([])
         setShowPodium(false)
         setIsPlaying(false)
         setCurrentLap(1)
@@ -170,10 +167,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         positions.forEach(p => {
             const driverLaps = groupedLaps[p.Driver] || [];
             // Get completed laps (LapTime is not null/undefined and lap has started)
-            const completedLaps = driverLaps.filter(l =>
-                l.LapTime && l.LapTime > 0 &&
-                l.LapStartTime !== null && l.LapStartTime <= currentTime
-            );
+            const completedLaps = driverLaps.filter(l => isLapCompleted(l, currentTime));
 
             // Sum up lap times for cumulative race time
             let cumulativeTime = 0;
@@ -191,10 +185,9 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             if (a.Status === 'RET' && b.Status !== 'RET') return 1;
             if (b.Status === 'RET' && a.Status !== 'RET') return -1;
 
-            // 1. If Race Finished (past maxTime OR leader has crossed finish), 
+            // 1. If Race Finished (past official finish or replay end),
             //    ALWAYS use Official Classification
-            const leaderLap = Math.max(...positions.map(p => p.Lap || 0));
-            const raceFinished = (raceEndTime > 0 && currentTime >= raceEndTime) || (totalLaps > 0 && leaderLap >= totalLaps) || (currentTime >= maxTime);
+            const raceFinished = (raceEndTime > 0 && currentTime >= raceEndTime) || (currentTime >= maxTime);
 
             if (raceFinished) {
                 // Use official classification - default to 99 for non-classified
@@ -211,19 +204,22 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                 return gridA - gridB;
             }
 
-            // 3. Standard Race Sorting: Higher Lap > Lower Cumulative Time (faster)
+            // 3. Standard Race Sorting: higher current lap, then current lap distance.
             const lapA = a.Lap || 0;
             const lapB = b.Lap || 0;
             if (lapA !== lapB) return lapB - lapA; // More laps = better
 
-            // Same lap: who finished it first (lower cumulative time = ahead)
-            // If cumulative times are available
+            const distanceA = asFiniteNumber(a.Distance);
+            const distanceB = asFiniteNumber(b.Distance);
+            if (distanceA !== null && distanceB !== null && Math.abs(distanceA - distanceB) > 0.01) {
+                return distanceB - distanceA;
+            }
+
             if (a.CumulativeTime && b.CumulativeTime) {
                 return a.CumulativeTime - b.CumulativeTime;
             }
 
-            // Fallback: use distance (for when cumulative time not yet available)
-            return (b.Distance || 0) - (a.Distance || 0);
+            return 0;
         });
 
         // Calculate Gaps
@@ -232,7 +228,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
             const leaderLap = leader.Lap || 0;
             const leaderTime = leader.CumulativeTime || 0;
 
-            const isRaceOver = (raceEndTime > 0 && currentTime >= raceEndTime) || (totalLaps > 0 && leaderLap >= totalLaps);
+            const isRaceOver = (raceEndTime > 0 && currentTime >= raceEndTime) || (currentTime >= maxTime);
 
             positions.forEach((p) => {
                 if (isRaceOver && driversInfo[p.Driver]?.ClassifiedPosition) {
@@ -263,17 +259,13 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         }
 
         return positions;
-    }, [groupedTelemetry, groupedLaps, currentTime, driversInfo, totalLaps, maxTime, raceEndTime, raceStartTime]);
+    }, [groupedTelemetry, groupedLaps, currentTime, driversInfo, maxTime, raceEndTime, raceStartTime]);
 
-    // Update standings state for Leaderboard
-    useEffect(() => {
-        const finishAt = raceEndTime && raceEndTime > 0 ? raceEndTime : maxTime;
-        if (finalStandings && currentTime >= finishAt) {
-            setStandings(finalStandings);
-            return;
-        }
-        setStandings(currentPositions);
-    }, [currentPositions, finalStandings, currentTime, raceEndTime, maxTime]);
+    const finishAt = raceEndTime && raceEndTime > 0 ? raceEndTime : maxTime;
+    const standings = useMemo(() => {
+        if (finalStandings && currentTime >= finishAt) return finalStandings;
+        return currentPositions;
+    }, [currentPositions, finalStandings, currentTime, finishAt]);
 
     const handlePlaybackFinish = useCallback(() => {
         setIsPlaying(false)
@@ -292,7 +284,6 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
 
     // Freeze leaderboard once the official finish is reached
     useEffect(() => {
-        const finishAt = raceEndTime && raceEndTime > 0 ? raceEndTime : maxTime;
         if (!finishAt || finishAt <= 0) return;
         if (finalStandings) return;
         if (currentTime < finishAt) return;
@@ -308,7 +299,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         setFinalStandings(officialSorted);
         setIsPlaying(false);
         if (!showPodium) setShowPodium(true);
-    }, [currentTime, raceEndTime, maxTime, finalStandings, currentPositions, showPodium, driversInfo]);
+    }, [currentTime, finishAt, finalStandings, currentPositions, showPodium, driversInfo]);
 
     // ==================== NEW FEATURES ====================
 
@@ -404,6 +395,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
     }, [currentLap, goToLap]);
 
     const goToNextLap = useCallback(() => {
+        if (!totalLaps || totalLaps <= 0) return;
         const nextLap = Math.min(totalLaps, currentLap + 1);
         goToLap(nextLap);
     }, [currentLap, totalLaps, goToLap]);
@@ -452,111 +444,58 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
 
     // ==================== END NEW FEATURES ====================
 
-    useEffect(() => {
-        if (!telemetry.length || !svgRef.current) return;
+    const trackGeometry = useMemo(() => {
+        const validTelemetry = telemetry.filter((d) => (
+            asFiniteNumber(d?.X) !== null && asFiniteNumber(d?.Y) !== null
+        ));
+
+        if (validTelemetry.length === 0) return null;
 
         const width = 800;
         const height = 500;
-        const svg = d3.select(svgRef.current);
-        svg.selectAll("*").remove(); // Clear previous
+        const xExtent = d3.extent(validTelemetry, d => d.X);
+        const yExtent = d3.extent(validTelemetry, d => d.Y);
 
-        // Scales
-        const xExtent = d3.extent(telemetry, d => d.X);
-        const yExtent = d3.extent(telemetry, d => d.Y);
+        if (xExtent.some((v) => v === undefined || v === null)) return null;
+        if (yExtent.some((v) => v === undefined || v === null)) return null;
 
-        // Add some padding
-        const xPadding = (xExtent[1] - xExtent[0]) * 0.1;
-        const yPadding = (yExtent[1] - yExtent[0]) * 0.1;
-
+        const xPadding = Math.max(1, (xExtent[1] - xExtent[0]) * 0.1);
+        const yPadding = Math.max(1, (yExtent[1] - yExtent[0]) * 0.1);
         const xScale = d3.scaleLinear()
             .domain([xExtent[0] - xPadding, xExtent[1] + xPadding])
             .range([0, width]);
-
         const yScale = d3.scaleLinear()
             .domain([yExtent[0] - yPadding, yExtent[1] + yPadding])
-            .range([height, 0]); // Invert Y for SVG
+            .range([height, 0]);
 
-        // Draw Track
-        if (telemetry.length > 0) {
-            const trackDriver = Object.keys(groupedTelemetry)[0];
-            const trackData = groupedTelemetry[trackDriver];
+        const trackDriver = Object.keys(groupedTelemetry).find((driver) => groupedTelemetry[driver]?.length > 2);
+        const trackData = (trackDriver ? groupedTelemetry[trackDriver] : validTelemetry)
+            .filter((d) => asFiniteNumber(d?.X) !== null && asFiniteNumber(d?.Y) !== null);
+        const line = d3.line()
+            .x(d => xScale(d.X))
+            .y(d => yScale(d.Y))
+            .curve(d3.curveCatmullRom);
 
-            const line = d3.line()
-                .x(d => xScale(d.X))
-                .y(d => yScale(d.Y))
-                .curve(d3.curveCatmullRom);
+        return {
+            path: line(trackData),
+            xScale,
+            yScale,
+        };
+    }, [telemetry, groupedTelemetry]);
 
-            // Glow effect definition
-            const defs = svg.append("defs");
-            const filter = defs.append("filter").attr("id", "glow");
-            filter.append("feGaussianBlur").attr("stdDeviation", "3.5").attr("result", "coloredBlur");
-            const feMerge = filter.append("feMerge");
-            feMerge.append("feMergeNode").attr("in", "coloredBlur");
-            feMerge.append("feMergeNode").attr("in", "SourceGraphic");
+    const activeDrivers = useMemo(() => (
+        trackGeometry ? currentPositions.filter(d => d.Status === "RUNNING") : []
+    ), [currentPositions, trackGeometry]);
 
-            // Track Outline (Glow)
-            svg.append("path")
-                .datum(trackData)
-                .attr("fill", "none")
-                .attr("stroke", "#444")
-                .attr("stroke-width", 8)
-                .attr("d", line)
-                .style("filter", "url(#glow)")
-                .attr("opacity", 0.5);
-
-            // Track Center Line
-            svg.append("path")
-                .datum(trackData)
-                .attr("fill", "none")
-                .attr("stroke", "#E0E0E0")
-                .attr("stroke-width", 2)
-                .attr("d", line)
-                .attr("opacity", 0.8);
-        }
-
-        // Draw Drivers (Filter out RETIRED)
-        const activeDrivers = currentPositions.filter(d => d.Status === "RUNNING");
-
-        const drivers = svg.selectAll(".driver-group")
-            .data(activeDrivers)
-            .enter()
-            .append("g")
-            .attr("class", "driver-group")
-            .attr("transform", d => `translate(${xScale(d.X)}, ${yScale(d.Y)})`);
-
-        // Driver Dot
-        drivers.append("circle")
-            .attr("r", 6)
-            .attr("fill", d => {
-                const info = driversInfo[d.Driver];
-                return info ? info.TeamColor : '#111';
-            })
-            .attr("stroke", d => {
-                const c = d.Compound ? d.Compound.toUpperCase() : 'UNKNOWN';
-                if (c.includes('SOFT')) return '#DC0000';
-                if (c.includes('MEDIUM')) return '#FCD700';
-                if (c.includes('HARD')) return '#E0E0E0';
-                if (c.includes('INTER')) return '#00D2BE';
-                if (c.includes('WET')) return '#0000FF';
-                return '#FFF';
-            })
-            .attr("stroke-width", 2);
-
-        // Driver Label
-        drivers.append("text")
-            .attr("x", 8)
-            .attr("y", 4)
-            .text(d => {
-                const info = driversInfo[d.Driver];
-                return info ? info.Abbreviation : d.Driver;
-            })
-            .attr("fill", "white")
-            .attr("font-size", "10px")
-            .attr("font-family", "Roboto Mono, monospace")
-            .attr("font-weight", "bold")
-            .style("text-shadow", "0px 0px 4px black");
-
-    }, [telemetry, currentPositions, driversInfo, groupedTelemetry]);
+    const getTyreStroke = useCallback((compound) => {
+        const c = compound ? compound.toUpperCase() : 'UNKNOWN';
+        if (c.includes('SOFT')) return '#FF1801';
+        if (c.includes('MEDIUM')) return '#BC5614';
+        if (c.includes('HARD')) return '#FBFBF9';
+        if (c.includes('INTER')) return '#00D2BE';
+        if (c.includes('WET')) return '#0000FF';
+        return '#FFF';
+    }, []);
 
     // Race Control Status (Flags) - Improved detection
     const currentStatus = useMemo(() => {
@@ -648,44 +587,62 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
     }, [weather, currentTime]);
 
     return (
-        <div className="flex flex-col items-center w-full bg-black min-h-screen text-white font-sans">
+        <div className="w-full text-white">
             {loading && (
-                <div className="w-full h-[500px] flex items-center justify-center border border-gray-800 rounded bg-black/50">
-                    <div className="text-rbr-yellow font-mono animate-pulse text-2xl">INITIALIZING TELEMETRY STREAM...</div>
+                <div className="velocity-panel grid min-h-[500px] place-items-center">
+                    <div className="velocity-mono animate-pulse text-center text-xl font-semibold uppercase text-rbr-yellow md:text-2xl">
+                        Initializing telemetry stream
+                    </div>
                 </div>
             )}
 
             {!loading && error && (
-                <div className="w-full h-[300px] flex flex-col items-center justify-center gap-4 border border-red-900/40 rounded bg-red-950/20">
-                    <div className="text-red-300 font-mono text-sm">{error}</div>
+                <div className="velocity-panel is-hot flex min-h-[300px] flex-col items-center justify-center gap-4 p-6">
+                    <div className="velocity-mono text-center text-sm text-red-200">{error}</div>
                     <button
+                        type="button"
                         onClick={retry}
-                        className="px-4 py-2 bg-rbr-red text-white rounded text-xs font-mono hover:bg-red-700"
+                        className="velocity-button px-5 py-2"
                     >
-                        RETRY LOAD
+                        Retry Load
                     </button>
                 </div>
             )}
 
             {!loading && !error && (
-                <div className="w-full max-w-[1800px] p-4 flex flex-col gap-4 min-h-[calc(100vh-80px)]">
-
-                    {/* Header with Logo */}
-                    <div className="flex items-center justify-between px-2 border-b border-gray-800 pb-2">
-                        <div className="flex items-center gap-4">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/3/33/F1.svg" alt="F1" className="h-6 bg-white p-1 rounded" />
-                            <h1 className="text-xl font-black italic tracking-tighter uppercase">
-                                <span className="text-rbr-red">Grid</span>Pulse <span className="text-gray-500 text-sm not-italic font-normal">| Post-Race Analytics</span>
-                            </h1>
+                <div className="flex w-full flex-col gap-3">
+                    <div className="velocity-panel grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
+                        <div className="terminal-pane-title lg:col-span-2">
+                            <span className="velocity-label">GPX Monitor</span>
+                            <span className="velocity-mono text-[10px] text-white/45">{raceName}</span>
                         </div>
-                        <div className="text-xs font-mono text-gray-500">
-                            {year} {raceName}
+                        <div className="min-w-0">
+                            <div className="px-3 pb-3">
+                            <div className="velocity-label mb-2">Post-Race Analytics</div>
+                            <h2 className="truncate text-xl font-display font-bold uppercase leading-none md:text-3xl">
+                                <span className="text-rbr-red">Grid</span>Pulse Console
+                            </h2>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-px bg-[#f6a11a]/10 p-px">
+                            <div className="bg-[#050607]/95 px-3 py-2">
+                                <div className="velocity-label">Season</div>
+                                <div className="velocity-mono mt-2 text-sm font-semibold text-white">{year}</div>
+                            </div>
+                            <div className="bg-[#050607]/95 px-3 py-2">
+                                <div className="velocity-label">Lap</div>
+                                <div className="velocity-mono mt-2 text-sm font-semibold text-white">{currentLap}/{totalLaps || '--'}</div>
+                            </div>
+                            <div className="bg-[#050607]/95 px-3 py-2">
+                                <div className="velocity-label">Clock</div>
+                                <div className="velocity-mono mt-2 text-sm font-semibold text-[#f6a11a]">{formatRaceClock(currentTime - raceStartTime)}</div>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-12 gap-4 flex-1 min-h-[600px]">
-                        {/* LEFT COLUMN: Leaderboard (20%) */}
-                        <div className="col-span-2 flex flex-col gap-4 h-full overflow-hidden">
+                    <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
+                        <aside className="h-[380px] overflow-hidden xl:col-span-2 xl:h-[700px]">
                             <Leaderboard
                                 standings={standings}
                                 driversInfo={driversInfo}
@@ -694,85 +651,149 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                                 selectedDriver={selectedDriver}
                                 comparisonDriver={comparisonDriver}
                             />
-                        </div>
+                        </aside>
 
-                        {/* CENTER COLUMN: Map & Charts (60%) */}
-                        <div className="col-span-8 flex flex-col gap-4 h-full">
-                            {/* Map Area */}
-                            <div className="relative border border-gray-700 rounded bg-black flex justify-center overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.6)] flex-grow min-h-[400px]">
-                                {/* Grid overlay */}
-                                <div className="absolute inset-0 pointer-events-none opacity-20"
-                                    style={{ backgroundImage: 'linear-gradient(#333 1px, transparent 1px), linear-gradient(90deg, #333 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
-                                </div>
+                        <section className="flex min-h-[700px] flex-col gap-3 xl:col-span-8">
+                            <div className="velocity-panel is-hot track-stage relative flex min-h-[440px] flex-1 justify-center overflow-hidden">
+                                <div className="track-grid pointer-events-none absolute inset-0 opacity-100"></div>
 
-                                {/* Flag Overlay */}
                                 {currentStatus && (
-                                    <div className={`absolute top-0 left-0 right-0 py-3 z-30 animate-pulse font-bold text-center text-2xl tracking-widest border-b-4 shadow-lg
-                            ${currentStatus.type === 'RED' ? 'bg-red-600/90 border-red-800 text-white' :
-                                            currentStatus.type === 'YELLOW' ? 'bg-yellow-500/90 border-yellow-700 text-black' :
-                                                'bg-orange-500/90 border-orange-700 text-black'}`}>
+                                    <div className={`absolute left-0 right-0 top-0 z-30 border-b py-3 text-center font-display text-xl font-bold uppercase
+                                        ${currentStatus.type === 'RED' ? 'border-red-800 bg-red-600/90 text-white' :
+                                            currentStatus.type === 'YELLOW' ? 'border-yellow-700 bg-yellow-400/90 text-black' :
+                                                'border-rbr-yellow bg-rbr-yellow/90 text-black'}`}>
                                         {currentStatus.text}
                                     </div>
                                 )}
 
-                                <svg ref={svgRef} viewBox="0 0 800 500" className="bg-transparent w-full h-full relative z-10" />
+                                <svg viewBox="0 0 800 500" className="relative z-10 h-full min-h-[460px] w-full" aria-label="Race track replay map">
+                                    <defs>
+                                        <filter id="track-glow">
+                                            <feGaussianBlur stdDeviation="4.5" result="coloredBlur" />
+                                            <feMerge>
+                                                <feMergeNode in="coloredBlur" />
+                                                <feMergeNode in="SourceGraphic" />
+                                            </feMerge>
+                                        </filter>
+                                    </defs>
 
-                                {/* Session Time & Lap */}
-                                <div className="absolute top-4 right-4 flex flex-col gap-2 z-20">
-                                    <div className="text-white font-mono bg-black/80 border border-gray-700 p-3 rounded shadow-lg backdrop-blur min-w-[100px]">
-                                        <div className="text-[10px] text-gray-400 uppercase tracking-wider">Race Time</div>
-                                        <div className="text-2xl text-rbr-red font-bold tabular-nums">
-                                            {(() => {
-                                                // Calculate elapsed time from race start (Lap 1)
-                                                const elapsed = Math.max(0, currentTime - raceStartTime);
-                                                const hours = Math.floor(elapsed / 3600);
-                                                const minutes = Math.floor((elapsed % 3600) / 60);
-                                                const seconds = Math.floor(elapsed % 60);
-                                                return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-                                            })()}
+                                    {trackGeometry?.path && (
+                                        <>
+                                            <path
+                                                d={trackGeometry.path}
+                                                fill="none"
+                                                stroke="#ff1801"
+                                                strokeWidth="12"
+                                                opacity="0.16"
+                                                filter="url(#track-glow)"
+                                            />
+                                            <path
+                                                d={trackGeometry.path}
+                                                fill="none"
+                                                stroke="#3a3939"
+                                                strokeWidth="9"
+                                                opacity="0.9"
+                                            />
+                                            <path
+                                                d={trackGeometry.path}
+                                                fill="none"
+                                                stroke="#fbfbf9"
+                                                strokeWidth="2"
+                                                opacity="0.86"
+                                            />
+                                        </>
+                                    )}
+
+                                    {trackGeometry && activeDrivers.map((driver) => {
+                                        const info = driversInfo[driver.Driver];
+                                        return (
+                                            <g
+                                                key={driver.Driver}
+                                                className="transition-transform duration-75 ease-linear"
+                                                transform={`translate(${trackGeometry.xScale(driver.X)}, ${trackGeometry.yScale(driver.Y)})`}
+                                            >
+                                                <circle
+                                                    r="7"
+                                                    fill={info?.TeamColor || '#111'}
+                                                    stroke={getTyreStroke(driver.Compound)}
+                                                    strokeWidth="2"
+                                                />
+                                                <circle r="10" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
+                                                <text
+                                                    x="11"
+                                                    y="4"
+                                                    fill="white"
+                                                    fontSize="10"
+                                                    fontFamily="JetBrains Mono, monospace"
+                                                    fontWeight="700"
+                                                    style={{ textShadow: '0 0 6px #000' }}
+                                                >
+                                                    {info?.Abbreviation || driver.Driver}
+                                                </text>
+                                            </g>
+                                        );
+                                    })}
+                                </svg>
+
+                                <div className="absolute right-3 top-3 z-20 grid gap-px bg-[#f6a11a]/10 p-px sm:grid-cols-2 xl:grid-cols-1">
+                                    <div className="min-w-[128px] bg-[#050607]/92 p-3">
+                                        <div className="velocity-label">Race Time</div>
+                                        <div className="velocity-mono mt-2 text-2xl font-bold tabular-nums text-[#f6a11a]">
+                                            {formatRaceClock(currentTime - raceStartTime)}
                                         </div>
                                     </div>
-                                    <div className="text-white font-mono bg-black/80 border border-gray-700 p-3 rounded shadow-lg backdrop-blur min-w-[100px]">
-                                        <div className="text-[10px] text-gray-400 uppercase tracking-wider">Lap</div>
-                                        <div className="text-2xl text-white font-bold tabular-nums">
-                                            {currentLap} <span className="text-gray-500 text-lg">/ {totalLaps}</span>
+                                    <div className="min-w-[128px] bg-[#050607]/92 p-3">
+                                        <div className="velocity-label">Lap</div>
+                                        <div className="velocity-mono mt-2 text-2xl font-bold tabular-nums text-white">
+                                            {currentLap} <span className="text-lg text-white/40">/ {totalLaps}</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Driver Details Modal */}
                                 {selectedDriver && driversInfo[selectedDriver] && (
-                                    <div className="absolute bottom-4 right-4 bg-black/90 border-l-4 border-rbr-red p-6 rounded w-80 z-30 shadow-2xl backdrop-blur-md">
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div>
-                                                <h3 className="text-3xl font-black text-white italic uppercase leading-none">{driversInfo[selectedDriver].LastName}</h3>
-                                                <div className="text-sm text-gray-400 uppercase tracking-widest">{driversInfo[selectedDriver].FirstName}</div>
+                                    <div className="velocity-panel is-hot absolute bottom-4 left-4 right-4 z-30 p-4 sm:left-auto sm:w-80 sm:p-5">
+                                        <div className="mb-4 flex items-start justify-between gap-4">
+                                            <div className="min-w-0">
+                                                <h3 className="truncate text-3xl font-display font-bold uppercase leading-none text-white">
+                                                    {driversInfo[selectedDriver].LastName}
+                                                </h3>
+                                                <div className="velocity-label mt-2">{driversInfo[selectedDriver].FirstName}</div>
                                             </div>
-                                            <button onClick={() => setSelectedDriver(null)} className="text-gray-500 hover:text-white text-xl">&times;</button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSelectedDriver(null)}
+                                                className="velocity-button secondary h-8 w-8 shrink-0"
+                                                aria-label="Close driver details"
+                                            >
+                                                X
+                                            </button>
                                         </div>
 
-                                        <div className="flex items-center gap-3 mb-4 bg-gray-900/50 p-2 rounded">
-                                            <div className="w-1.5 h-10" style={{ backgroundColor: driversInfo[selectedDriver].TeamColor }}></div>
-                                            <div>
-                                                <div className="text-xs text-gray-500 uppercase">Team</div>
-                                                <div className="text-sm font-bold text-white">{driversInfo[selectedDriver].TeamName}</div>
+                                        <div className="metric-tile mb-4 flex items-center gap-3 p-3">
+                                            <div className="h-11 w-1.5" style={{ backgroundColor: driversInfo[selectedDriver].TeamColor }}></div>
+                                            <div className="min-w-0">
+                                                <div className="velocity-label">Team</div>
+                                                <div className="truncate text-sm font-bold text-white">{driversInfo[selectedDriver].TeamName}</div>
                                             </div>
-                                            <div className="ml-auto text-4xl font-bold text-gray-700 italic opacity-50">{selectedDriver}</div>
+                                            <div className="velocity-mono ml-auto text-3xl font-bold text-white/20">{selectedDriver}</div>
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-4 text-xs font-mono">
-                                            <div className="bg-gray-800 p-2 rounded">
-                                                <div className="text-gray-500 mb-1">TYRE</div>
-                                                <div className="text-white text-lg font-bold">{standings.find(d => d.Driver === selectedDriver)?.Compound || '-'}</div>
+                                        <div className="grid grid-cols-2 gap-3 text-xs">
+                                            <div className="metric-tile p-3">
+                                                <div className="velocity-label">Tyre</div>
+                                                <div className="velocity-mono mt-2 text-lg font-bold text-white">{standings.find(d => d.Driver === selectedDriver)?.Compound || '-'}</div>
                                             </div>
-                                            <div className="bg-gray-800 p-2 rounded">
-                                                <div className="text-gray-500 mb-1">SPEED</div>
-                                                <div className="text-white text-lg font-bold">{Math.round(standings.find(d => d.Driver === selectedDriver)?.Speed || 0)} <span className="text-xs font-normal">km/h</span></div>
+                                            <div className="metric-tile p-3">
+                                                <div className="velocity-label">Speed</div>
+                                                <div className="velocity-mono mt-2 text-lg font-bold text-white">
+                                                    {Math.round(standings.find(d => d.Driver === selectedDriver)?.Speed || 0)}
+                                                    <span className="ml-1 text-xs font-normal text-white/50">km/h</span>
+                                                </div>
                                             </div>
-                                            <div className="bg-gray-800 p-2 rounded col-span-2">
-                                                <div className="text-gray-500 mb-1">STATUS</div>
-                                                <div className={`text-lg font-bold ${standings.find(d => d.Driver === selectedDriver)?.Status === 'RET' ? 'text-red-500' : 'text-green-500'}`}>
-                                                    {standings.find(d => d.Driver === selectedDriver)?.Status === 'RET' ? 'RETIRED' : 'ON TRACK'}
+                                            <div className="metric-tile col-span-2 p-3">
+                                                <div className="velocity-label">Status</div>
+                                                <div className={`velocity-mono mt-2 text-lg font-bold ${standings.find(d => d.Driver === selectedDriver)?.Status === 'RET' ? 'text-red-400' : 'text-pb-green'}`}>
+                                                    {standings.find(d => d.Driver === selectedDriver)?.Status === 'RET' ? 'Retired' : 'On Track'}
                                                 </div>
                                             </div>
                                         </div>
@@ -796,73 +817,70 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                                 onSpeedChange={setSpeed}
                             />
 
-                            {/* Telemetry Charts (Collapsible or Fixed Height) */}
-                            <div className="h-[200px] shrink-0">
+                            <div className="h-[210px] shrink-0">
                                 <TelemetryCharts
                                     telemetry={telemetry}
+                                    groupedTelemetry={groupedTelemetry}
                                     selectedDriver={selectedDriver}
                                     comparisonDriver={comparisonDriver}
                                     leaderDriver={standings[0]?.Driver}
                                     currentTime={currentTime}
                                 />
                             </div>
-                        </div>
+                        </section>
 
-                        {/* RIGHT COLUMN: Info & Strategy (20%) */}
-                        <div className="col-span-2 flex flex-col gap-4 h-full overflow-y-auto custom-scrollbar pr-1">
-                            {/* Circuit Info Panel */}
-                            <div className="bg-gray-900/80 border border-gray-700 rounded p-3 backdrop-blur-sm shrink-0">
-                                <h3 className="text-gray-400 text-[10px] uppercase tracking-widest mb-2 border-b border-gray-700 pb-1">Circuit Information</h3>
-                                <div className="text-sm font-bold text-white mb-1 truncate" title={circuitInfo.OfficialEventName || raceName}>{circuitInfo.OfficialEventName || raceName}</div>
-                                <div className="flex justify-between text-[10px] text-gray-300 mb-2">
-                                    <span>{circuitInfo.Location}</span>
-                                    <span>R{circuitInfo.RoundNumber}</span>
+                        <aside className="flex flex-col gap-3 overflow-y-auto pr-1 xl:col-span-2 xl:h-[700px]">
+                            <div className="velocity-panel shrink-0">
+                                <div className="terminal-pane-title">
+                                    <h3 className="velocity-label">Circuit Information</h3>
+                                </div>
+                                <div className="p-3">
+                                <div className="mb-2 truncate text-sm font-bold text-white" title={circuitInfo.OfficialEventName || raceName}>{circuitInfo.OfficialEventName || raceName}</div>
+                                <div className="mb-3 flex justify-between gap-3 text-[10px] text-white/60">
+                                    <span className="truncate">{circuitInfo.Location}</span>
+                                    <span className="velocity-mono shrink-0">R{circuitInfo.RoundNumber}</span>
                                 </div>
 
                                 {currentWeather && (
-                                    <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
-                                        <div className="bg-gray-800 p-1.5 rounded">
-                                            <div className="text-gray-500 mb-0.5">AIR</div>
-                                            <div className="text-white font-bold">{currentWeather.AirTemp}°C</div>
+                                    <div className="grid grid-cols-2 gap-px bg-[#f6a11a]/10 p-px text-[10px]">
+                                        <div className="bg-[#050607]/95 p-2">
+                                            <div className="velocity-label">Air</div>
+                                            <div className="velocity-mono mt-1 font-bold text-white">{currentWeather.AirTemp}°C</div>
                                         </div>
-                                        <div className="bg-gray-800 p-1.5 rounded">
-                                            <div className="text-gray-500 mb-0.5">TRACK</div>
-                                            <div className="text-white font-bold">{currentWeather.TrackTemp}°C</div>
+                                        <div className="bg-[#050607]/95 p-2">
+                                            <div className="velocity-label">Track</div>
+                                            <div className="velocity-mono mt-1 font-bold text-white">{currentWeather.TrackTemp}°C</div>
                                         </div>
-                                        <div className="bg-gray-800 p-1.5 rounded">
-                                            <div className="text-gray-500 mb-0.5">HUM</div>
-                                            <div className="text-white font-bold">{currentWeather.Humidity}%</div>
+                                        <div className="bg-[#050607]/95 p-2">
+                                            <div className="velocity-label">Hum</div>
+                                            <div className="velocity-mono mt-1 font-bold text-white">{currentWeather.Humidity}%</div>
                                         </div>
-                                        <div className="bg-gray-800 p-1.5 rounded">
-                                            <div className="text-gray-500 mb-0.5">WIND</div>
-                                            <div className="text-white font-bold">{currentWeather.WindSpeed} m/s</div>
+                                        <div className="bg-[#050607]/95 p-2">
+                                            <div className="velocity-label">Wind</div>
+                                            <div className="velocity-mono mt-1 font-bold text-white">{currentWeather.WindSpeed} m/s</div>
                                         </div>
                                     </div>
                                 )}
+                                </div>
                             </div>
 
                             <RaceMessagesPanel recentMessages={recentMessages} />
 
-                            {/* Pit Stop Analysis */}
-                            <div className="flex-1 min-h-[150px] flex flex-col">
-                                <PitStopAnalysis laps={laps} driversInfo={driversInfo} />
+                            <div className="min-h-[160px] flex-1">
+                                <PitStopAnalysis laps={laps} driversInfo={driversInfo} currentTime={currentTime} />
                             </div>
 
-                            {/* Sector Times */}
                             <SectorTimes
                                 laps={laps}
                                 driversInfo={driversInfo}
                                 standings={standings}
                                 currentTime={currentTime}
                             />
-                        </div>
-
+                        </aside>
                     </div>
 
-                    {/* Bottom Row: Gap Chart and Strategy Panel */}
-                    <div className="grid grid-cols-2 gap-4 shrink-0">
-                        {/* Gap to Leader Chart */}
-                        <div className="h-64">
+                    <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                        <div className="h-72">
                             <GapChart
                                 laps={laps}
                                 driversInfo={driversInfo}
@@ -872,19 +890,18 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
                             />
                         </div>
 
-                        {/* Strategy Panel */}
-                        <div className="h-64">
+                        <div className="h-72">
                             <StrategyPanel
                                 laps={laps}
                                 driversInfo={driversInfo}
-                                totalLaps={laps.length > 0 ? Math.max(...laps.map(l => l.LapNumber)) : 0}
+                                currentTime={currentTime}
+                                totalLaps={totalLaps}
                             />
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Podium Display Modal */}
             <PodiumDisplay
                 standings={standings}
                 driversInfo={driversInfo}

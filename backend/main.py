@@ -8,6 +8,53 @@ import pandas as pd
 import json
 from pathlib import Path
 
+
+def _shift_time_fields(records, fields, offset):
+    """Shift FastF1 session-relative fields onto the frontend replay timeline."""
+    if not offset or offset <= 0:
+        return
+
+    for record in records:
+        for field in fields:
+            if record.get(field) is None:
+                continue
+            try:
+                record[field] = float(record[field]) - float(offset)
+            except Exception:
+                pass
+
+
+def _team_color(value):
+    if value is None or pd.isna(value):
+        return "#FFFFFF"
+
+    color = str(value).strip()
+    if not color:
+        return "#FFFFFF"
+    return color if color.startswith("#") else f"#{color}"
+
+
+def _time_column_to_seconds(df, column, start_date=None):
+    if column not in df.columns:
+        return df
+
+    values = df[column]
+    try:
+        if pd.api.types.is_timedelta64_ns_dtype(values):
+            df[column] = values.dt.total_seconds()
+        elif pd.api.types.is_datetime64_any_dtype(values) or (len(values) > 0 and isinstance(values.iloc[0], pd.Timestamp)):
+            parsed = pd.to_datetime(values)
+            if start_date is not None:
+                df[column] = (parsed - pd.to_datetime(start_date)).dt.total_seconds()
+            else:
+                df[column] = parsed.astype('int64') / 1e9
+        else:
+            df[column] = pd.to_timedelta(values).dt.total_seconds()
+    except Exception:
+        pass
+
+    return df
+
 # Setup caching
 # Use /tmp for cloud environments (Render/Vercel), local folder for dev
 cache_dir = '/tmp/f1_cache' if os.environ.get('VERCEL') or os.environ.get('RENDER') else 'f1_cache'
@@ -15,7 +62,7 @@ if not os.path.exists(cache_dir):
     os.makedirs(cache_dir)
 fastf1.Cache.enable_cache(cache_dir)
 
-app = FastAPI(title="PRAH Backend")
+app = FastAPI(title="GridPulse Backend")
 
 # CORS Setup
 # Handle the case where ALLOWED_ORIGINS is just "*" (common in dev/simple setups)
@@ -25,7 +72,7 @@ if allowed_origins_env == "*":
     origins = ["*"]
 else:
     # Split by comma, strip whitespace, and remove trailing slashes
-    origins = [origin.strip().rstrip("/") for origin in allowed_origins_env.split(",")]
+    origins = [origin.strip().rstrip("/") for origin in allowed_origins_env.split(",") if origin.strip()]
 
 print(f"Configured CORS origins: {origins}")
 
@@ -39,7 +86,7 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"message": "Oracle Red Bull Racing - Post-Race Analytics Hub API is running"}
+    return {"message": "GridPulse F1 Replay Analytics API is running"}
 
 
 @app.get("/api/build_info")
@@ -75,7 +122,7 @@ def get_telemetry_replay(year: int, race_name: str):
         # Load the session
         print(f"Loading session for {year} {race_name}...")
         session = fastf1.get_session(year, race_name, 'R')
-        
+
         # Load all data including messages (for race control)
         try:
             session.load(telemetry=True, laps=True, weather=True, messages=True)
@@ -83,15 +130,15 @@ def get_telemetry_replay(year: int, race_name: str):
             # Older FastF1 version doesn't have messages parameter
             session.load(telemetry=True, laps=True, weather=True)
         print("Session loaded successfully.")
-        
+
         drivers = session.drivers
         all_drivers_data = []
         global_t0 = None  # global minimum telemetry time in seconds (used to shift all outputs)
-        
+
         print(f"Processing {len(drivers)} drivers for {year} {race_name}...")
 
         # Limit drivers for debugging/performance if needed (e.g. first 5)
-        # drivers = drivers[:5] 
+        # drivers = drivers[:5]
 
         for driver in drivers:
             try:
@@ -134,18 +181,18 @@ def get_telemetry_replay(year: int, race_name: str):
                 # Fallback to lap-based telemetry if full-session data isn't available
                 if tel is None:
                     tel = driver_laps.get_telemetry()
-                
+
                 # Create a mapping for Compound and LapNumber based on Time
                 # We need to merge 'Compound' and 'LapNumber' from laps into telemetry
                 # We can use merge_asof, but we need to prepare the laps dataframe
                 laps_data = driver_laps[['LapStartTime', 'Compound', 'LapNumber']].copy()
                 laps_data['Time'] = laps_data['LapStartTime'] # Rename for merge
                 laps_data = laps_data.dropna(subset=['Time'])
-                
+
                 # Ensure Time is Timedelta
-                if not isinstance(tel['Time'].dtype, pd.Timedelta):
+                if 'Time' in tel.columns and not pd.api.types.is_timedelta64_ns_dtype(tel['Time']):
                     tel['Time'] = pd.to_timedelta(tel['Time'])
-                
+
                 # NOTE:
                 # Do NOT inject a synthetic row at time=0.
                 # Doing so forces LapNumber=1 for all telemetry prior to the real Lap 1 start,
@@ -154,35 +201,37 @@ def get_telemetry_replay(year: int, race_name: str):
 
                 # Merge Compound and LapNumber info
                 # We use merge_asof to find the last LapStartTime <= Telemetry Time
-                tel = pd.merge_asof(tel.sort_values('Time'), 
-                                    laps_data[['Time', 'Compound', 'LapNumber']].sort_values('Time'), 
-                                    on='Time', 
+                tel = pd.merge_asof(tel.sort_values('Time'),
+                                    laps_data[['Time', 'Compound', 'LapNumber']].sort_values('Time'),
+                                    on='Time',
                                     direction='backward')
-                
+
                 # Resample to 1 second frequency for smoother playback (was 2S)
                 tel = tel.set_index('Time')
-                
+
                 # Create the full time grid
-                resampled = tel.resample('1S').first()
-                
+                resampled = tel.resample('1s').first()
+
                 # Interpolate continuous variables to fill gaps (prevents disappearing cars)
                 continuous_cols = ['X', 'Y', 'Speed', 'Distance', 'Throttle', 'Brake', 'RPM']
                 cols_to_interp = [c for c in continuous_cols if c in resampled.columns]
-                resampled[cols_to_interp] = resampled[cols_to_interp].interpolate(method='linear', limit_direction='both')
-                
+                if cols_to_interp:
+                    resampled[cols_to_interp] = resampled[cols_to_interp].apply(pd.to_numeric, errors='coerce')
+                    resampled[cols_to_interp] = resampled[cols_to_interp].interpolate(method='linear', limit_direction='both')
+
                 # Forward fill categorical/discrete variables
                 categorical_cols = ['LapNumber', 'Compound', 'nGear', 'DRS']
                 cols_to_ffill = [c for c in categorical_cols if c in resampled.columns]
                 resampled[cols_to_ffill] = resampled[cols_to_ffill].ffill()
-                
+
                 resampled = resampled.reset_index()
-                
+
                 # Select relevant columns
                 cols_to_keep = ['Time', 'X', 'Y', 'Speed', 'Compound', 'LapNumber', 'Distance', 'Throttle', 'Brake', 'nGear', 'RPM', 'DRS']
                 available_cols = [c for c in cols_to_keep if c in resampled.columns]
-                
+
                 final_df = resampled[available_cols].copy()
-                
+
                 # Convert Time to total seconds for JSON
                 final_df['Time'] = final_df['Time'].dt.total_seconds()
                 # Track global t0 across all drivers
@@ -193,7 +242,7 @@ def get_telemetry_replay(year: int, race_name: str):
                 except Exception:
                     pass
                 final_df['Driver'] = driver
-                
+
                 # REMOVED: Filter out data after the race is officially over
                 # This was causing the race to end early if total_laps was incorrect or if data was slightly misaligned.
                 # We will let the frontend handle the "stop" logic.
@@ -204,19 +253,19 @@ def get_telemetry_replay(year: int, race_name: str):
                 # This handles NaN -> null automatically
                 records = json.loads(final_df.to_json(orient='records'))
                 all_drivers_data.extend(records)
-                
+
                 print(f"Processed {driver} - {len(records)} points")
-                
+
                 # Explicitly clear large variables to help GC
                 del tel
                 del resampled
                 del final_df
                 del records
-                
+
             except Exception as e:
                 print(f"Error processing driver {driver}: {e}")
                 continue
-        
+
         print(f"Finished processing all drivers. Total points: {len(all_drivers_data)}")
 
         # Normalize to a common timeline starting at zero (matches reference implementation)
@@ -231,7 +280,7 @@ def get_telemetry_replay(year: int, race_name: str):
                     rec['Time'] = float(rec['Time']) - global_t0
             except Exception:
                 pass
-        
+
         # Extract Driver Info
         drivers_info = {}
         if hasattr(session, 'results'):
@@ -250,7 +299,7 @@ def get_telemetry_replay(year: int, race_name: str):
                     "DriverNumber": driver_number,
                     "Abbreviation": row['Abbreviation'],
                     "TeamName": row['TeamName'],
-                    "TeamColor": f"#{row['TeamColor']}" if row['TeamColor'] else "#FFFFFF",
+                    "TeamColor": _team_color(row.get('TeamColor')),
                     "FirstName": row['FirstName'],
                     "LastName": row['LastName'],
                     "HeadshotUrl": row.get('HeadshotUrl', ''),
@@ -274,34 +323,58 @@ def get_telemetry_replay(year: int, race_name: str):
                 laps['Driver'] = laps['DriverNumber'].astype(str)
 
             # Convert Timedeltas
-            time_cols = ['LapStartTime', 'LapTime', 'Sector1Time', 'Sector2Time', 'Sector3Time', 'PitInTime', 'PitOutTime']
+            time_cols = [
+                'LapStartTime',
+                'LapTime',
+                'Sector1Time',
+                'Sector2Time',
+                'Sector3Time',
+                'Sector1SessionTime',
+                'Sector2SessionTime',
+                'Sector3SessionTime',
+                'PitInTime',
+                'PitOutTime',
+            ]
             for col in time_cols:
                 if col in laps.columns:
                     laps[col] = laps[col].dt.total_seconds()
-            
+
             # Select columns - including sector times for analysis
-            laps_cols = ['Driver', 'DriverAbbreviation', 'LapNumber', 'Stint', 'Compound', 'TyreLife', 'LapTime', 'LapStartTime', 'PitInTime', 'PitOutTime', 'Sector1Time', 'Sector2Time', 'Sector3Time']
+            laps_cols = [
+                'Driver',
+                'DriverAbbreviation',
+                'LapNumber',
+                'Position',
+                'Stint',
+                'Compound',
+                'TyreLife',
+                'LapTime',
+                'LapStartTime',
+                'PitInTime',
+                'PitOutTime',
+                'Sector1Time',
+                'Sector2Time',
+                'Sector3Time',
+                'Sector1SessionTime',
+                'Sector2SessionTime',
+                'Sector3SessionTime',
+            ]
             available_laps_cols = [c for c in laps_cols if c in laps.columns]
             laps_data = json.loads(laps[available_laps_cols].to_json(orient='records'))
 
             # Shift lap times to the same zero-based timeline
-            if global_t0 and global_t0 > 0:
-                for l in laps_data:
-                    if l.get('LapStartTime') is not None:
-                        try:
-                            l['LapStartTime'] = float(l['LapStartTime']) - global_t0
-                        except Exception:
-                            pass
-                    if l.get('PitInTime') is not None:
-                        try:
-                            l['PitInTime'] = float(l['PitInTime']) - global_t0
-                        except Exception:
-                            pass
-                    if l.get('PitOutTime') is not None:
-                        try:
-                            l['PitOutTime'] = float(l['PitOutTime']) - global_t0
-                        except Exception:
-                            pass
+            _shift_time_fields(
+                laps_data,
+                [
+                    'LapStartTime',
+                    'PitInTime',
+                    'PitOutTime',
+                    'Sector1SessionTime',
+                    'Sector2SessionTime',
+                    'Sector3SessionTime',
+                ],
+                global_t0,
+            )
 
         # Extract Track Status (Safety Car, etc.)
         events = []
@@ -311,13 +384,7 @@ def get_telemetry_replay(year: int, race_name: str):
             events = json.loads(ts.to_json(orient='records'))
             print(f"Track status events: {len(events)}")
 
-            if global_t0 and global_t0 > 0:
-                for ev in events:
-                    if ev.get('Time') is not None:
-                        try:
-                            ev['Time'] = float(ev['Time']) - global_t0
-                        except Exception:
-                            pass
+            _shift_time_fields(events, ['Time'], global_t0)
 
         # Extract Race Control Messages
         race_control = []
@@ -365,13 +432,7 @@ def get_telemetry_replay(year: int, race_name: str):
                 race_control = json.loads(rc.to_json(orient='records'))
                 print(f"Race control messages: {len(race_control)}")
 
-                if global_t0 and global_t0 > 0:
-                    for msg in race_control:
-                        if msg.get('Time') is not None:
-                            try:
-                                msg['Time'] = float(msg['Time']) - global_t0
-                            except Exception:
-                                pass
+                _shift_time_fields(race_control, ['Time'], global_t0)
 
         # Extract Circuit Info
         circuit_info = {}
@@ -408,13 +469,7 @@ def get_telemetry_replay(year: int, race_name: str):
                         pass
             weather_data = json.loads(wd.to_json(orient='records'))
 
-            if global_t0 and global_t0 > 0:
-                for w in weather_data:
-                    if w.get('Time') is not None:
-                        try:
-                            w['Time'] = float(w['Time']) - global_t0
-                        except Exception:
-                            pass
+            _shift_time_fields(weather_data, ['Time'], global_t0)
 
         # Calculate Total Laps
         total_laps = 0
@@ -432,16 +487,16 @@ def get_telemetry_replay(year: int, race_name: str):
             # Ensure columns exist
             laps_cols = [c for c in laps_cols if c in laps_df.columns]
             laps_export = laps_df[laps_cols].copy()
-            
+
             # Convert Timedeltas
             for col in ['LapTime', 'LapStartTime']:
                 if col in laps_export.columns:
                     laps_export[col] = laps_export[col].dt.total_seconds()
-            
+
             # Handle NaNs - DO NOT fill Time columns with 0 as it breaks logic
             # We only fill non-time columns if needed, or let JSON handle nulls
-            # laps_export = laps_export.fillna(0) 
-            
+            # laps_export = laps_export.fillna(0)
+
             all_laps_data = json.loads(laps_export.to_json(orient='records'))
 
         return {
@@ -586,14 +641,13 @@ def get_team_radio(year: int, race_name: str):
         except TypeError:
             # Older FastF1 version doesn't have messages parameter
             session.load(telemetry=False, laps=False, weather=False)
-        
+
         radio_data = []
-        
+
         # Try team_radio attribute (FastF1 >= 3.0)
         if hasattr(session, 'team_radio') and session.team_radio is not None and not session.team_radio.empty:
             radios = session.team_radio.copy()
-            if 'Time' in radios.columns:
-                radios['Time'] = radios['Time'].dt.total_seconds()
+            _time_column_to_seconds(radios, 'Time', getattr(session, 'date', None))
             cols = [c for c in ['Time', 'Driver', 'Message'] if c in radios.columns]
             radio_data = json.loads(radios[cols].to_json(orient='records'))
         # Fallback: Try get_driver_radio (older FastF1)
@@ -603,13 +657,12 @@ def get_team_radio(year: int, race_name: str):
                     radio = session.get_driver_radio(driver)
                     if radio is not None and not radio.empty:
                         radio['Driver'] = driver
-                        if 'Time' in radio.columns:
-                            radio['Time'] = radio['Time'].dt.total_seconds()
+                        _time_column_to_seconds(radio, 'Time', getattr(session, 'date', None))
                         cols = [c for c in ['Time', 'Driver', 'Message'] if c in radio.columns]
                         radio_data.extend(json.loads(radio[cols].to_json(orient='records')))
                 except:
                     pass
-        
+
         print(f"Team radio: {len(radio_data)} messages loaded")
         return radio_data
     except Exception as e:

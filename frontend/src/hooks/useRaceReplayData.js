@@ -75,6 +75,22 @@ const EMPTY = {
   initialTime: 0,
 }
 
+const replayRequestCache = new Map()
+
+const getReplayRequest = (cacheKey, load) => {
+  if (replayRequestCache.has(cacheKey)) {
+    return replayRequestCache.get(cacheKey)
+  }
+
+  const request = load().catch((error) => {
+    replayRequestCache.delete(cacheKey)
+    throw error
+  })
+
+  replayRequestCache.set(cacheKey, request)
+  return request
+}
+
 export default function useRaceReplayData({ year, raceName, apiUrl }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -94,10 +110,11 @@ export default function useRaceReplayData({ year, raceName, apiUrl }) {
       setData(EMPTY)
 
       try {
-        const [radioRes, telemetryRes] = await Promise.all([
+        const cacheKey = `${apiUrl}|${year}|${raceName}|${retryToken}`
+        const [radioRes, telemetryRes] = await getReplayRequest(cacheKey, () => Promise.all([
           axios.get(`${apiUrl}/api/${year}/${raceName}/race/team_radio`).catch(() => ({ data: [] })),
           axios.get(`${apiUrl}/api/${year}/${raceName}/race/telemetry_replay`),
-        ])
+        ]))
 
         if (cancelled) return
 
@@ -107,7 +124,7 @@ export default function useRaceReplayData({ year, raceName, apiUrl }) {
         const laps = res.laps || []
         const events = res.events || []
         const raceControl = normalizeMessages(res.race_control, res.time_base)
-        const teamRadio = normalizeMessages(radioRes.data, 0)
+        const teamRadio = normalizeMessages(radioRes.data, res.time_base)
         const circuitInfo = res.circuit_info || {}
         const weather = res.weather || []
         const totalLaps = res.total_laps || 0

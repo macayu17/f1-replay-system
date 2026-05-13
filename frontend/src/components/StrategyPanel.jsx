@@ -1,4 +1,5 @@
 import React from 'react';
+import { isLapStarted } from '../utils/replayMath';
 
 const TYRE_COLORS = {
   'SOFT': 'bg-red-500',
@@ -9,36 +10,36 @@ const TYRE_COLORS = {
   'UNKNOWN': 'bg-gray-500'
 };
 
-const StrategyPanel = ({ laps, driversInfo, totalLaps }) => {
+const StrategyPanel = ({ laps, driversInfo, totalLaps, currentTime }) => {
   // Group laps by driver
   const driverStrategies = React.useMemo(() => {
     if (!laps || laps.length === 0) return {};
-    
+
     const strategies = {};
     laps.forEach(lap => {
+        if (!isLapStarted(lap, currentTime)) return;
         if (!strategies[lap.Driver]) strategies[lap.Driver] = [];
         strategies[lap.Driver].push(lap);
     });
-    
+
     // Sort laps for each driver
     Object.keys(strategies).forEach(d => {
         strategies[d].sort((a, b) => a.LapNumber - b.LapNumber);
     });
-    
+
     return strategies;
-  }, [laps]);
+  }, [laps, currentTime]);
 
   const drivers = Object.keys(driverStrategies).sort();
 
   return (
-    <div className="bg-gray-900/80 border border-gray-700 rounded p-3 backdrop-blur-sm overflow-x-auto h-full flex flex-col">
-      <h3 className="text-white text-[10px] font-bold uppercase tracking-widest border-b border-gray-700 pb-1 mb-2 shrink-0">Tyre Strategy History</h3>
-      
+    <div className="velocity-panel flex h-full flex-col overflow-x-auto p-3">
+      <h3 className="velocity-label mb-3 shrink-0 border-b border-white/10 pb-2 text-white">Tyre Strategy History</h3>
+
       <div className="min-w-[800px] flex-1 overflow-y-auto custom-scrollbar pr-2">
-        {/* Header (Lap Numbers) */}
-        <div className="flex mb-1 ml-12 sticky top-0 bg-gray-900/90 z-10">
+        <div className="sticky top-0 z-10 mb-2 ml-12 flex bg-[#111]/90">
             {Array.from({length: Math.ceil(totalLaps / 5)}).map((_, i) => (
-                <div key={i} className="flex-1 text-[9px] text-gray-500 border-l border-gray-800 pl-1">
+                <div key={i} className="velocity-mono flex-1 border-l border-white/10 pl-1 text-[9px] text-white/45">
                     {(i * 5) + 1}
                 </div>
             ))}
@@ -47,25 +48,25 @@ const StrategyPanel = ({ laps, driversInfo, totalLaps }) => {
         {drivers.map(driver => {
             const driverLaps = driverStrategies[driver];
             const info = driversInfo[driver] || {};
-            
+
             return (
-                <div key={driver} className="flex items-center mb-1 h-4">
-                    <div className="w-12 text-[9px] font-bold text-white flex items-center gap-1 shrink-0">
-                        <div className="w-0.5 h-3" style={{backgroundColor: info.TeamColor}}></div>
-                        {driver}
+                <div key={driver} className="mb-1 flex h-5 items-center">
+                    <div className="velocity-mono flex w-12 shrink-0 items-center gap-1 text-[9px] font-bold text-white">
+                        <div className="h-3 w-0.5" style={{backgroundColor: info.TeamColor}}></div>
+                        {info.Abbreviation || driver}
                     </div>
-                    
-                    <div className="flex-1 flex h-1.5 bg-gray-800 rounded-sm overflow-hidden relative">
+
+                    <div className="relative flex h-2 flex-1 overflow-hidden rounded-sm bg-white/10">
                         {driverLaps.map((lap, i) => {
                             const colorClass = TYRE_COLORS[lap.Compound?.toUpperCase()] || 'bg-gray-600';
-                            const widthPct = (1 / totalLaps) * 100;
-                            
+                            const widthPct = totalLaps > 0 ? (1 / totalLaps) * 100 : 0;
+
                             // Check for pit stop
                             const isPit = !!lap.PitOutTime;
-                            
+
                             return (
-                                <div 
-                                    key={i} 
+                                <div
+                                    key={i}
                                     className={`${colorClass} h-full relative group`}
                                     style={{width: `${widthPct}%`}}
                                     title={`Lap ${lap.LapNumber}: ${lap.Compound}`}

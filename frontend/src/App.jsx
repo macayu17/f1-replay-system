@@ -9,10 +9,8 @@ function App() {
   const [races, setRaces] = useState([])
   const [selectedRace, setSelectedRace] = useState(null)
   const [loading, setLoading] = useState(false)
-  
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-  
-  console.log("Frontend API URL:", API_URL); // Debugging log
+
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
   useEffect(() => {
     axios.get(`${API_URL}/api/seasons`)
@@ -41,97 +39,153 @@ function App() {
   }, [selectedSeason, API_URL])
 
   return (
-    <div className="min-h-screen bg-rbr-black text-white font-sans flex flex-col">
-      <header className="relative bg-gradient-to-r from-[#0d1018] via-[#101624] to-[#0d1018]/95 border-b border-white/10 p-4 flex justify-between items-center z-10 backdrop-blur shadow-[0_8px_30px_rgba(0,0,0,0.35)]">
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-rbr-red/70 to-transparent" />
-        <div className="flex items-center gap-4">
-          <div className="w-1 h-8 bg-rbr-red rounded-full"></div>
-          <h1 className="text-xl md:text-2xl font-display font-semibold tracking-wide uppercase">
-            <span className="text-white/95">GRIDPULSE</span> <span className="text-rbr-red">·</span>{' '}
-            <span className="bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">F1 Replay</span>
-            <span className="text-gray-300 text-[10px] font-mono border border-white/20 px-2 py-0.5 rounded-full ml-2 align-middle normal-case">revamp</span>
-          </h1>
+    <div className="velocity-app min-h-screen text-white font-sans flex flex-col">
+      <header className="sticky top-0 z-40 border-b border-[#f6a11a]/20 bg-[#050607]/92 backdrop-blur-xl">
+        <div className="velocity-shell px-3 py-3 md:px-5">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex min-w-0 items-center gap-4">
+              <div className="velocity-mono grid h-10 w-14 shrink-0 place-items-center border border-[#f6a11a]/45 bg-[#f6a11a]/12 text-xs font-black text-[#f6a11a]">
+                GPX
+              </div>
+              <div className="min-w-0">
+                <div className="velocity-label mb-1">Bloomberg-style race terminal</div>
+                <h1 className="min-w-0 text-xl font-display font-bold uppercase leading-none md:text-3xl">
+                  GridPulse <span className="text-[#f6a11a]">Grand Prix Rewind</span>
+                </h1>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-[minmax(130px,160px)_minmax(220px,340px)]">
+              <div className="flex flex-col gap-2">
+                <label className="velocity-label" htmlFor="season-select">Season</label>
+                <select
+                  id="season-select"
+                  className="velocity-input velocity-mono w-full px-3 text-sm"
+                  onChange={(e) => {
+                    const nextSeason = e.target.value
+                    setSelectedRace(null)
+                    if (!nextSeason) {
+                      setRaces([])
+                      setLoading(false)
+                    } else {
+                      setLoading(true)
+                    }
+                    setSelectedSeason(nextSeason)
+                  }}
+                  value={selectedSeason || ''}
+                >
+                  <option value="">Select</option>
+                  {seasons.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div className="flex min-w-0 flex-col gap-2">
+                <label className="velocity-label" htmlFor="race-select">Grand Prix</label>
+                <select
+                  id="race-select"
+                  className="velocity-input velocity-mono w-full px-3 text-sm"
+                  onChange={(e) => {
+                    const race = races.find(r => r.EventName === e.target.value)
+                    setSelectedRace(race || null)
+                  }}
+                  value={selectedRace?.EventName || ''}
+                  disabled={!selectedSeason}
+                >
+                  <option value="">Select event</option>
+                  {races.map(r => <option key={r.EventName} value={r.EventName}>{r.EventName}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
-        
-        <div className="flex gap-4">
-          <div className="flex flex-col">
-            <label className="text-[10px] text-gray-400 uppercase tracking-widest font-mono">Season</label>
-            <select 
-              className="bg-black/70 border border-white/20 p-1.5 rounded-md text-white font-mono text-sm focus:border-rbr-red outline-none transition-colors"
-              onChange={(e) => {
-                const nextSeason = e.target.value
-                setSelectedRace(null)
-                if (!nextSeason) {
-                  setRaces([])
-                  setLoading(false)
-                } else {
-                  setLoading(true)
-                }
-                setSelectedSeason(nextSeason)
-              }}
-              value={selectedSeason || ''}
-            >
-              <option value="">SELECT</option>
-              {seasons.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          
-          <div className="flex flex-col">
-            <label className="text-[10px] text-gray-400 uppercase tracking-widest font-mono">Grand Prix</label>
-            <select 
-              className="bg-black/70 border border-white/20 p-1.5 rounded-md text-white font-mono text-sm focus:border-rbr-red outline-none min-w-[220px] transition-colors"
-              onChange={(e) => {
-                  const race = races.find(r => r.EventName === e.target.value);
-                  setSelectedRace(race || null);
-              }}
-              value={selectedRace?.EventName || ''}
-              disabled={!selectedSeason}
-            >
-              <option value="">SELECT EVENT</option>
-              {races.map(r => <option key={r.EventName} value={r.EventName}>{r.EventName}</option>)}
-            </select>
-          </div>
+
+        <div className="terminal-tape custom-scrollbar">
+          <div className="terminal-cell"><span className="terminal-key">API</span> <span className="terminal-value">FASTF1/HF</span></div>
+          <div className="terminal-cell"><span className="terminal-key">MODE</span> <span className="terminal-up">LIVE REPLAY</span></div>
+          <div className="terminal-cell"><span className="terminal-key">SEASONS</span> <span className="terminal-value">{seasons.length || '--'}</span></div>
+          <div className="terminal-cell"><span className="terminal-key">EVENTS</span> <span className="terminal-value">{races.length || '--'}</span></div>
+          <div className="terminal-cell"><span className="terminal-key">STYLE</span> <span className="terminal-value">TERMINAL DENSE</span></div>
+          <div className="terminal-cell"><span className="terminal-key">FEED</span> <span className={loading ? 'terminal-down' : 'terminal-up'}>{loading ? 'SYNCING' : 'READY'}</span></div>
         </div>
       </header>
 
-      <main className="flex-grow p-4 md:p-6 relative overflow-hidden">
+      <main className="velocity-shell flex-grow px-3 py-4 md:px-5 md:py-5 relative">
 
         {loading && (
-          <div className="absolute top-20 right-6 flex items-center gap-2 text-rbr-yellow font-mono text-xs animate-pulse">
-            <div className="w-2 h-2 bg-rbr-yellow rounded-full"></div>
-            FETCHING DATA...
+          <div className="velocity-panel absolute right-4 top-5 z-30 flex items-center gap-3 px-4 py-3 text-xs text-rbr-yellow md:right-8 md:top-8">
+            <div className="h-2 w-2 bg-rbr-yellow shadow-[0_0_10px_rgba(188,86,20,0.8)]"></div>
+            <span className="velocity-mono uppercase">Fetching race data</span>
           </div>
         )}
-        
+
         {!selectedRace && !loading && (
-          <div className="flex flex-col items-center justify-center h-[60vh] text-gray-600">
-            <div className="text-6xl mb-4 opacity-20 font-bold">NO DATA</div>
-            <p className="text-xl font-mono">AWAITING SESSION SELECTION</p>
+          <div className="grid min-h-[66vh] place-items-center">
+            <section className="velocity-panel is-hot w-full max-w-6xl">
+              <div className="terminal-pane-title">
+                <span className="velocity-label">Race Control Standby</span>
+                <span className="velocity-mono text-[10px] text-white/45">GPX&lt;GO&gt;</span>
+              </div>
+              <div className="grid gap-px bg-[#f6a11a]/10 p-px lg:grid-cols-[1.25fr_0.75fr]">
+                <div className="bg-[#050607]/95 p-5 md:p-7">
+                  <div className="velocity-mono mb-4 text-xs text-[#f6a11a]">GRIDPULSE / F1R / SESSION SELECT</div>
+                  <h2 className="max-w-3xl text-3xl font-display font-bold uppercase leading-tight md:text-5xl">
+                    Select a season and event to load the race replay terminal.
+                  </h2>
+                  <div className="mt-6 grid gap-px bg-white/10 text-xs sm:grid-cols-3">
+                    <div className="terminal-cell"><span className="terminal-key">POS</span> <span className="terminal-value">TRACK MAP</span></div>
+                    <div className="terminal-cell"><span className="terminal-key">TEL</span> <span className="terminal-value">60S WINDOW</span></div>
+                    <div className="terminal-cell"><span className="terminal-key">RC</span> <span className="terminal-value">RADIO/FLAGS</span></div>
+                  </div>
+                </div>
+
+                <div className="grid gap-px bg-[#f6a11a]/10 p-px sm:grid-cols-3 lg:grid-cols-1">
+                  <div className="bg-[#050607]/95 p-4">
+                    <div className="velocity-label">Available Seasons</div>
+                    <div className="velocity-mono mt-3 text-3xl font-semibold text-white">{seasons.length || '--'}</div>
+                  </div>
+                  <div className="bg-[#050607]/95 p-4">
+                    <div className="velocity-label">Loaded Events</div>
+                    <div className="velocity-mono mt-3 text-3xl font-semibold text-white">{races.length || '--'}</div>
+                  </div>
+                  <div className="bg-[#050607]/95 p-4">
+                    <div className="velocity-label">Data Link</div>
+                    <div className="velocity-mono mt-3 text-sm font-semibold text-[#f6a11a]">FastAPI / FastF1</div>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
         )}
 
         {selectedRace && (
-          <div className="grid grid-cols-1 gap-8 relative z-0">
-            <div className="bg-rbr-charcoal/50 backdrop-blur-sm p-1 rounded-lg border border-gray-800 shadow-2xl">
-              <div className="bg-black/40 p-4 border-b border-gray-800 flex justify-between items-end">
-                <div>
-                    <h2 className="text-3xl font-bold uppercase italic tracking-wider text-white">
-                        {selectedRace.EventName}
-                    </h2>
-                    <div className="text-rbr-red font-mono text-xs tracking-widest mt-1">RACE REPLAY // TELEMETRY SYNC</div>
+          <div className="relative z-0 grid grid-cols-1 gap-4">
+            <section className="velocity-panel is-hot">
+              <div className="grid gap-4 border-b border-[#f6a11a]/15 bg-black/35 p-3 md:grid-cols-[1fr_auto] md:items-end md:p-4">
+                <div className="min-w-0">
+                  <div className="velocity-label mb-2">Race Replay / Telemetry Sync</div>
+                  <h2 className="truncate text-2xl font-display font-bold uppercase leading-none text-white md:text-4xl">
+                    {selectedRace.EventName}
+                  </h2>
                 </div>
-                <div className="text-right font-mono text-xs text-gray-400">
-                    <div>LOC: {selectedRace.Location}</div>
-                    <div>DATE: {new Date(selectedRace.EventDate).toLocaleDateString()}</div>
+
+                <div className="grid grid-cols-2 gap-3 md:min-w-[280px]">
+                  <div className="metric-tile px-3 py-2">
+                    <div className="velocity-label">Location</div>
+                    <div className="velocity-mono mt-2 truncate text-xs text-white/80" title={selectedRace.Location}>{selectedRace.Location}</div>
+                  </div>
+                  <div className="metric-tile px-3 py-2">
+                    <div className="velocity-label">Date</div>
+                    <div className="velocity-mono mt-2 text-xs text-white/80">{new Date(selectedRace.EventDate).toLocaleDateString()}</div>
+                  </div>
                 </div>
               </div>
-              
-              <div className="p-6">
+
+              <div className="p-3 md:p-5">
                 <Suspense fallback={<div className="text-sm text-gray-400 font-mono">Loading replay engine…</div>}>
                   <RaceReplay year={selectedSeason} raceName={selectedRace.EventName} apiUrl={API_URL} />
                 </Suspense>
               </div>
-            </div>
+            </section>
           </div>
         )}
       </main>
