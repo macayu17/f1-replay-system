@@ -11,7 +11,13 @@ import ReplayControls from './ReplayControls'
 import RaceMessagesPanel from './RaceMessagesPanel'
 import useRaceReplayData from '../hooks/useRaceReplayData'
 import useReplayPlayback from '../hooks/useReplayPlayback'
-import { asFiniteNumber, formatRaceClock, isLapCompleted } from '../utils/replayMath'
+import {
+    asFiniteNumber,
+    formatRaceClock,
+    getRaceElapsedTime,
+    isLapCompleted,
+    isRaceClockMessageVisible,
+} from '../utils/replayMath'
 
 const RaceReplay = ({ year, raceName, apiUrl }) => {
     const [currentTime, setCurrentTime] = useState(0)
@@ -262,6 +268,7 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
     }, [groupedTelemetry, groupedLaps, currentTime, driversInfo, maxTime, raceEndTime, raceStartTime]);
 
     const finishAt = raceEndTime && raceEndTime > 0 ? raceEndTime : maxTime;
+    const raceElapsedTime = getRaceElapsedTime(currentTime, raceStartTime);
     const standings = useMemo(() => {
         if (finalStandings && currentTime >= finishAt) return finalStandings;
         return currentPositions;
@@ -544,7 +551,9 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
 
         // Fallback: Check Race Control Messages for explicit flag announcements
         // Only use this if no track status events are available
-        const recentMsgs = raceControl.filter(m => m.Time <= currentTime && m.Time > currentTime - 30);  // Within last 30 seconds
+        const recentMsgs = raceControl.filter(m => (
+            isRaceClockMessageVisible(m, currentTime, raceStartTime) && m.Time > raceElapsedTime - 30
+        ));
         const lastMsg = recentMsgs[recentMsgs.length - 1];
 
         if (lastMsg) {
@@ -556,16 +565,18 @@ const RaceReplay = ({ year, raceName, apiUrl }) => {
         }
 
         return null;
-    }, [events, raceControl, currentTime]);
+    }, [events, raceControl, currentTime, raceStartTime, raceElapsedTime]);
 
     // Recent Race Control Messages & Team Radio
     const recentMessages = useMemo(() => {
-        const rc = raceControl.filter(m => m.Time <= currentTime).map(m => ({ ...m, type: 'RC' }));
+        const rc = raceControl
+            .filter(m => isRaceClockMessageVisible(m, currentTime, raceStartTime))
+            .map(m => ({ ...m, type: 'RC' }));
         const tr = teamRadio.filter(m => m.Time <= currentTime).map(m => ({ ...m, type: 'TR' }));
 
         const all = [...rc, ...tr].sort((a, b) => a.Time - b.Time);
         return all.slice(-8).reverse();
-    }, [raceControl, teamRadio, currentTime]);
+    }, [raceControl, teamRadio, currentTime, raceStartTime]);
 
     // Current Weather
     const currentWeather = useMemo(() => {

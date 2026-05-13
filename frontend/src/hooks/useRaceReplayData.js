@@ -40,14 +40,14 @@ const parseTimeSeconds = (value) => {
   return null
 }
 
-const normalizeMessages = (msgs, timeBase) => {
+const normalizeMessages = (msgs, timeBase, { subtractTimeBase = true } = {}) => {
   const base = (typeof timeBase === 'number' && Number.isFinite(timeBase)) ? timeBase : 0
   return (Array.isArray(msgs) ? msgs : [])
     .map((m) => {
       const rawTime = m?.Time ?? m?.SessionTime ?? m?.time ?? m?.sessionTime ?? null
       let t = parseTimeSeconds(rawTime)
 
-      if (!(t != null && base && t > base + 60 * 60 && t > 1e6) && t != null && base && t > base && t > 60 * 10) {
+      if (subtractTimeBase && !(t != null && base && t > base + 60 * 60 && t > 1e6) && t != null && base && t > base && t > 60 * 10) {
         t = t - base
       }
 
@@ -123,7 +123,7 @@ export default function useRaceReplayData({ year, raceName, apiUrl }) {
         const driversInfo = res.drivers || {}
         const laps = res.laps || []
         const events = res.events || []
-        const raceControl = normalizeMessages(res.race_control, res.time_base)
+        const raceControl = normalizeMessages(res.race_control, res.time_base, { subtractTimeBase: false })
         const teamRadio = normalizeMessages(radioRes.data, res.time_base)
         const circuitInfo = res.circuit_info || {}
         const weather = res.weather || []

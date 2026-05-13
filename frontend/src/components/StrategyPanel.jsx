@@ -1,5 +1,5 @@
 import React from 'react';
-import { isLapStarted } from '../utils/replayMath';
+import { isLapStarted, isPitStopVisible } from '../utils/replayMath';
 
 const TYRE_COLORS = {
   'SOFT': 'bg-red-500',
@@ -62,7 +62,7 @@ const StrategyPanel = ({ laps, driversInfo, totalLaps, currentTime }) => {
                             const widthPct = totalLaps > 0 ? (1 / totalLaps) * 100 : 0;
 
                             // Check for pit stop
-                            const isPit = !!lap.PitOutTime;
+                            const isPit = isPitStopVisible(lap, currentTime);
 
                             return (
                                 <div

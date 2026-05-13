@@ -3,6 +3,7 @@ export const isFiniteNumber = (value) => (
 )
 
 export const asFiniteNumber = (value) => {
+  if (value === null || value === undefined || value === '') return null
   const n = Number(value)
   return Number.isFinite(n) ? n : null
 }
@@ -82,6 +83,19 @@ export const isPitStopVisible = (lap, currentTime) => {
   const pitTime = asFiniteNumber(lap?.PitInTime ?? lap?.PitOutTime)
   const now = asFiniteNumber(currentTime)
   return pitTime !== null && now !== null && pitTime <= now
+}
+
+export const getRaceElapsedTime = (currentTime, raceStartTime) => {
+  const now = asFiniteNumber(currentTime)
+  const start = asFiniteNumber(raceStartTime)
+  if (now === null || start === null) return 0
+  return Math.max(0, now - start)
+}
+
+export const isRaceClockMessageVisible = (message, currentTime, raceStartTime) => {
+  const messageTime = asFiniteNumber(message?.Time)
+  if (messageTime === null || messageTime < 0) return false
+  return messageTime <= getRaceElapsedTime(currentTime, raceStartTime)
 }
 
 export const isSectorVisible = (lap, sectorPrefix, currentTime) => {
