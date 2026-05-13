@@ -1,3 +1,10 @@
+---
+title: GridPulse F1 Replay Backend
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # GRIDPULSE · F1 Replay Analytics
 
 GRIDPULSE is a full-stack Formula 1 replay and telemetry analysis app.
